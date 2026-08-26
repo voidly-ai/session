@@ -1,0 +1,17 @@
+{
+  "name": "voidly-session",
+  "private": true,
+  "description": "The Voidly private-hire session rail: a client and the wire protocol it speaks.",
+  "workspaces": [
+    "session-protocol",
+    "voidly-session-sdk"
+  ],
+  "scripts": {
+    "test": "npm --workspace @voidly/session run test",
+    "typecheck": "npm --workspace @voidly/session run typecheck",
+    "build": "npm --workspace @voidly/session run build"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

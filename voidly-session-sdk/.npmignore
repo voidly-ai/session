@@ -1,0 +1,21 @@
+# BELT AND BRACES. `files: ["dist","README.md","LICENSE"]` in package.json is an
+# ALLOW-LIST and already decides this; an allow-list is the control, because a
+# deny-list catches only the leaks you imagined. This file exists anyway for the
+# reason `voidly-worker@0.1.0` shipped a live `.env` for five months: npm
+# resolves ignore rules at the PACKAGE root and never looks up a level, so the
+# repo's own .gitignore is not in play here. `scripts/check-tarball.mjs` checks
+# the RESULT rather than either intent.
+#
+# Without either, `npm pack` bundles every test file and the mainnet harness.
+src/
+tests/
+scripts/
+*.tsbuildinfo
+tsconfig.json
+vitest.config.ts
+.env
+.env.*
+*.pem
+*.key
+*.map
+NOTES-internal.md

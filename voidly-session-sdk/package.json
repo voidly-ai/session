@@ -1,0 +1,62 @@
+{
+  "name": "@voidly/session",
+  "version": "1.0.0",
+  "description": "Client for the Voidly Pay session rail: private hire, verify-only settlement on Base. The rail never holds, custodies or submits funds — the payee relays its own settlement and the verifier's only I/O is read-only JSON-RPC.",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/voidly-ai/session.git"
+  },
+  "homepage": "https://github.com/voidly-ai/session#readme",
+  "bugs": {
+    "url": "https://github.com/voidly-ai/session/issues"
+  },
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
+    },
+    "./break-even": {
+      "types": "./dist/breakEven.d.ts",
+      "import": "./dist/breakEven.mjs",
+      "default": "./dist/breakEven.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "gate": "node scripts/check-tarball.mjs",
+    "gate:narrative": "node ../scripts/check-assembly-seal.mjs",
+    "gate:origin": "node scripts/check-origin.mjs",
+    "prepublishOnly": "npm run build && npm run gate && npm run gate:narrative && npm run gate:origin",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p scripts/tsconfig.json",
+    "dry-run": "node scripts/dry-run-base-mainnet-payment.mjs"
+  },
+  "dependencies": {
+    "tweetnacl": "^1.0.3",
+    "tweetnacl-util": "^0.15.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "esbuild": "^0.28.1",
+    "ethers": "^6.17.0",
+    "typescript": "^5.3.3",
+    "vitest": "^3.2.6"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "Apache-2.0"
+}

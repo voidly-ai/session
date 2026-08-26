@@ -1,0 +1,7 @@
+# Generated. Installed dependencies and build output are not committed here.
+
+node_modules/
+dist/
+coverage/
+.turbo/
+.next/

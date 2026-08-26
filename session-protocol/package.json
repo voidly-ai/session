@@ -1,0 +1,32 @@
+{
+  "name": "@voidly/session-protocol",
+  "version": "1.0.0",
+  "private": true,
+  "description": "The wire format of the Voidly private-hire session rail: the envelopes both sides build, the canonicalization they hash, and the validators that read what arrives. No server decision-making.",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/voidly-ai/session.git",
+    "directory": "session-protocol"
+  },
+  "homepage": "https://github.com/voidly-ai/session#readme",
+  "bugs": {
+    "url": "https://github.com/voidly-ai/session/issues"
+  },
+  "sideEffects": false,
+  "dependencies": {
+    "tweetnacl": "^1.0.3",
+    "tweetnacl-util": "^0.15.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "gate:pinning": "node scripts/check-daemon-dep-pinning.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "Apache-2.0"
+}

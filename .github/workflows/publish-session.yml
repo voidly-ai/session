@@ -1,0 +1,247 @@
+# Publish @voidly/session to npm with a provenance attestation.
+#
+# This file is authored here and COPIED into the assembled public tree by
+# scripts/build-public-tree.mjs, because npm provenance is only issued for a
+# publish that runs in GitHub Actions from a PUBLIC source repository. The job
+# is guarded on `github.repository`, so the copy that sits in the private tree
+# is inert: dispatching it there skips every step rather than doing half a
+# publish somewhere it does not belong.
+#
+# THREE THINGS HAVE TO BE TRUE AT ONCE BEFORE A BYTE LEAVES:
+#
+#   1. a human dispatched it by hand, typed the exact version, typed the
+#      confirmation phrase, and switched dry-run off. The default is dry-run
+#      ON, so a dispatch that accepts every default publishes nothing.
+#   2. every gate the package carries passes as a VISIBLE step, before npm
+#      runs them again inside prepublishOnly. A gate that only runs inside
+#      npm's own hook reports its failure as an npm exit code.
+#   3. the manifest agrees with the repository it is running in, the version
+#      is not already on the registry, and the licence is real and shipped.
+#
+# There is no push trigger and no tag trigger. Nothing here fires on its own.
+
+name: publish @voidly/session
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish. Must equal the version in voidly-session-sdk/package.json."
+        required: true
+        type: string
+      confirm:
+        description: "Type PUBLISH to proceed. Anything else refuses."
+        required: true
+        type: string
+        default: ""
+      dry_run:
+        description: "Leave true to rehearse. Set false to actually publish."
+        required: true
+        type: boolean
+        default: true
+      dist_tag:
+        description: "npm dist-tag."
+        required: true
+        type: string
+        default: latest
+
+# Least privilege. `id-token: write` is what mints the OIDC token npm exchanges
+# for a provenance attestation; without it `--provenance` fails rather than
+# silently publishing an unattested tarball.
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-voidly-session
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    # THE GUARD THAT MAKES THIS FILE SAFE TO CARRY IN TWO PLACES.
+    if: github.repository == 'voidly-ai/session'
+    runs-on: ubuntu-latest
+    # The registry token lives in this environment and nowhere else, so a job
+    # that reaches npm without it cannot authenticate.
+    #
+    # ⚠ THIS LINE DOES NOT CREATE THE CONTROL IT LOOKS LIKE, AND ON A FRESH
+    # REPOSITORY IT CREATES NOTHING AT ALL. GitHub does not refuse a job that
+    # names an environment which does not exist: it AUTO-CREATES one under that
+    # name, and the environment it makes carries no protection rules and no
+    # secrets. So on a repository where `npm-publish` was not created by hand
+    # FIRST, the first dispatch quietly manufactures an unprotected environment,
+    # no reviewer is ever asked, `secrets.NPM_TOKEN` resolves to the empty
+    # string, and the run dies at the publish step on an npm auth code after
+    # every gate above has already gone green. A DRY RUN is worse still: it
+    # never reads the token at all, so a full rehearsal passes and proves
+    # nothing whatsoever about the credential or the reviewers.
+    #
+    # THE ENVIRONMENT MUST EXIST, HOLD NPM_TOKEN, AND CARRY ITS REQUIRED
+    # REVIEWERS BEFORE THE FIRST NON-DRY-RUN DISPATCH. Neither the environment
+    # nor its destination repository exists yet; both are ledgered with the
+    # exact owner commands in `.github/secret-inventory.json` under
+    # `known_unresolved`.
+    environment: npm-publish
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Refuse unless the operator confirmed
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.confirm }}" != "PUBLISH" ]; then
+            echo "REFUSING — confirmation phrase was '${{ inputs.confirm }}', expected PUBLISH"
+            exit 1
+          fi
+          echo "confirmed; dry_run=${{ inputs.dry_run }} dist_tag=${{ inputs.dist_tag }}"
+
+      - uses: actions/checkout@v4
+        with:
+          # Full history and all remote refs. The package's own origin gate asks
+          # whether HEAD exists on a remote branch, and a depth-1 checkout of a
+          # detached commit cannot answer that.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Assert the toolchain can issue provenance
+        run: |
+          set -euo pipefail
+          npm_major=$(npm --version | cut -d. -f1)
+          npm_minor=$(npm --version | cut -d. -f2)
+          if [ "$npm_major" -lt 9 ] || { [ "$npm_major" -eq 9 ] && [ "$npm_minor" -lt 5 ]; }; then
+            echo "REFUSING — npm $(npm --version) predates provenance support (needs 9.5 or newer)"
+            exit 1
+          fi
+          echo "node $(node --version), npm $(npm --version)"
+
+      - name: Assert the manifest agrees with where it is running
+        working-directory: voidly-session-sdk
+        run: |
+          set -euo pipefail
+          declared_version=$(node -p "require('./package.json').version")
+          declared_repo=$(node -p "require('./package.json').repository.url")
+          declared_license=$(node -p "require('./package.json').license")
+          is_private=$(node -p "require('./package.json').private === true")
+
+          if [ "$declared_version" != "${{ inputs.version }}" ]; then
+            echo "REFUSING — manifest says $declared_version, dispatch asked for ${{ inputs.version }}"
+            exit 1
+          fi
+
+          # npm compares this field against GITHUB_REPOSITORY when it mints the
+          # attestation. A mismatch is an attestation naming a source nobody can
+          # read, so refuse here with a sentence rather than there with a code.
+          expected="git+https://github.com/${GITHUB_REPOSITORY}.git"
+          if [ "$declared_repo" != "$expected" ]; then
+            echo "REFUSING — repository field is $declared_repo, expected $expected"
+            exit 1
+          fi
+
+          if [ "$is_private" = "true" ]; then
+            echo "REFUSING — package.json still carries private:true, which is a deliberate brake."
+            echo "Lift it in the source tree, re-assemble, and dispatch again."
+            exit 1
+          fi
+
+          if [ "$declared_license" != "Apache-2.0" ]; then
+            echo "REFUSING — license field is $declared_license, expected Apache-2.0"
+            exit 1
+          fi
+          for f in LICENSE NOTICE; do
+            if [ ! -s "$f" ]; then
+              echo "REFUSING — $f is missing or empty. npm omits a file named in 'files' silently,"
+              echo "so the tarball would promise a grant in its manifest and ship none."
+              exit 1
+            fi
+          done
+          echo "manifest coherent: $declared_version, $declared_repo, $declared_license"
+
+      - name: Refuse if that version is already on the registry
+        run: |
+          set -euo pipefail
+          if npm view "@voidly/session@${{ inputs.version }}" version >/dev/null 2>&1; then
+            echo "REFUSING — @voidly/session@${{ inputs.version }} is already published."
+            echo "A published version is immutable. Bump the version in the source tree instead."
+            exit 1
+          fi
+          echo "@voidly/session@${{ inputs.version }} is free"
+
+      - name: Install
+        run: |
+          set -euo pipefail
+          if [ -f package-lock.json ]; then
+            npm ci --no-audit --no-fund
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: Typecheck
+        working-directory: voidly-session-sdk
+        run: npm run typecheck
+
+      - name: Build
+        working-directory: voidly-session-sdk
+        run: npm run build
+
+      - name: Test
+        working-directory: voidly-session-sdk
+        run: npm test
+
+      # The same four commands prepublishOnly runs, run here first so a red one
+      # shows up as a named failing step.
+      - name: Gate — tarball contents
+        working-directory: voidly-session-sdk
+        run: npm run gate
+
+      - name: Gate — assembly seal
+        working-directory: voidly-session-sdk
+        run: npm run gate:narrative
+
+      - name: Gate — origin attributability
+        working-directory: voidly-session-sdk
+        run: npm run gate:origin
+
+      - name: Publish (rehearsal)
+        if: ${{ inputs.dry_run }}
+        working-directory: voidly-session-sdk
+        run: |
+          set -euo pipefail
+          echo "dry_run is on. Everything above passed; nothing was uploaded."
+          npm pack --dry-run
+
+      - name: Publish
+        if: ${{ !inputs.dry_run }}
+        working-directory: voidly-session-sdk
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          npm publish --provenance --access public --tag "${{ inputs.dist_tag }}"
+
+      # THE TRIPWIRE. A publish that succeeds without an attestation looks
+      # identical to one that carries it, and the whole reason for a public
+      # source repository is the attestation. Say so loudly if it is absent.
+      - name: Assert the attestation exists
+        if: ${{ !inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5; do
+            sleep 10
+            count=$(npm view "@voidly/session@${{ inputs.version }}" dist.attestations --json 2>/dev/null | wc -c)
+            if [ "$count" -gt 4 ]; then
+              echo "attestation present for @voidly/session@${{ inputs.version }}"
+              npm view "@voidly/session@${{ inputs.version }}" dist.attestations --json
+              exit 0
+            fi
+            echo "attempt $attempt — no attestation visible yet"
+          done
+          echo "PUBLISHED WITHOUT A VISIBLE ATTESTATION. The package is live and cannot be"
+          echo "recalled, but provenance did not take. Investigate before the next release:"
+          echo "a public repository whose packages carry no attestation is decoration."
+          exit 1

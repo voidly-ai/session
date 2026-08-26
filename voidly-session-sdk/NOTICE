@@ -1,0 +1,17 @@
+Voidly Session
+Copyright 2026 Voidly
+
+This product includes software developed at Voidly (https://voidly.ai/).
+
+Licensed under the Apache License, Version 2.0. A copy of the License
+accompanies this file as LICENSE, and is also available at
+http://www.apache.org/licenses/LICENSE-2.0
+
+Section 4(d) of the License requires anyone redistributing this work, or a
+derivative of it, to carry the attribution notices above. Nothing else in
+this file modifies the License.
+
+The published bundle contains no third-party code: tweetnacl and
+tweetnacl-util are declared as runtime dependencies and marked external at
+build time, so they are resolved by the installer rather than inlined, and
+no attribution for them is carried here.
