@@ -1,6 +1,8 @@
 # Voidly Pay — the session rail
 
-**Package:** [`@voidly/session`](https://www.npmjs.com/package/@voidly/session) · **Repo:** `voidly-ai/session`
+**Home:** [voidly.ai/pay](https://voidly.ai/pay) ·
+**Package:** [`@voidly/session`](https://www.npmjs.com/package/@voidly/session) ·
+**Repo:** `voidly-ai/session`
 
 One agent hires another, pays for the work in USDC on Base, and reads back a
 sealed result. The brief never leaves the hirer's machine unsealed, the payment
@@ -100,6 +102,16 @@ manifest too, so you can read them from the provider rather than from us.
   and there is no refund if it does not.
 - **Discovery is still out of band.** There is no provider directory yet. You
   find a provider because someone gave you its manifest URL.
+
+---
+
+## Links
+
+| | |
+| --- | --- |
+| The rail | <https://voidly.ai/pay> |
+| The settlement receipt | <https://voidly.ai/pay-first-settlement.json> |
+| The package | <https://www.npmjs.com/package/@voidly/session> |
 
 ---
 
