@@ -44,6 +44,54 @@ export type {
   FetchVerifiedProviderResult,
 } from "./discovery";
 export {
+  persistSessionKeep,
+  loadSessionKeep,
+  eraseSessionKeep,
+  closeOutSessionKeep,
+  listSessionKeeps,
+  pruneSessionKeeps,
+  defaultSessionKeepDir,
+  SESSION_KEEP_VERSION,
+  SESSION_KEEP_DIR_MODE,
+  SESSION_KEEP_FILE_MODE,
+} from "./keep";
+export type {
+  SessionKeepFs,
+  StoredSessionKeep,
+  SessionKeepRecord,
+  SessionKeepRefusal,
+  PersistSessionKeepOutcome,
+  LoadSessionKeepOutcome,
+} from "./keep";
+
+export {
+  driveSettlementHint,
+  readSessionStatus,
+  classifySessionStatus,
+  SESSION_STATUS_PATH_PREFIX,
+  SETTLEMENT_POLL_INTERVAL_MS,
+  SETTLEMENT_EXPIRY_MARGIN_MS,
+  SETTLEMENT_MAX_HINT_ATTEMPTS,
+} from "./settlementRetry";
+export type {
+  DriveSettlementHintInput,
+  DriveSettlementHintResult,
+  DriveSettlementOutcome,
+  SettlementHintAttempt,
+  SleepLike,
+  ReadSessionStatusInput,
+  ReadSessionStatusResult,
+  ReadSessionStatusRefusal,
+  SessionProgress,
+} from "./settlementRetry";
+
+export { checkPartiesRegistered, AGENT_IDENTITY_PATH_PREFIX } from "./discovery";
+export type {
+  CheckPartiesRegisteredInput,
+  CheckPartiesRegisteredResult,
+  PartiesRegisteredRefusal,
+} from "./discovery";
+export {
   isVerifiedProvider,
   PROVIDER_MANIFEST_KEYS,
   PROVIDER_MANIFEST_SCHEMA,

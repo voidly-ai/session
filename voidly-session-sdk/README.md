@@ -14,22 +14,23 @@ is not in this package.
 
 ## Install
 
-> **This package is not on the public registry.** `npm install @voidly/session`
-> answers `E404`, and you did not mistype it: `package.json` declares
-> `private: true` and nothing has ever been published under this name. That is a
-> deliberate gate, and this document does not carry a date for lifting it.
->
-> **Meanwhile, install the tarball.** Ask the operator who gave you this document
-> for one, or build it yourself from a checkout of the source tree:
+```bash
+npm install @voidly/session
+```
+
+That is the whole of it. The package is on the public registry under that exact
+name, and nothing about getting the bytes needs an operator to hand you anything.
+
+> **Building from a checkout instead?** Pack it yourself:
 >
 > ```bash
-> npm run build && npm pack        # → voidly-session-1.0.0.tgz
-> npm install /path/to/voidly-session-1.0.0.tgz
+> npm run build && npm pack        # → voidly-session-1.0.1.tgz
+> npm install /path/to/voidly-session-1.0.1.tgz
 > ```
 >
-> Those are the same bytes `npm publish` would upload — `npm run gate` scans that
-> tarball and nothing else — so a hire that works against it works unchanged
-> against the published package on the day there is one.
+> Those are the same bytes `npm publish` uploads — `npm run gate` scans that
+> tarball and nothing else — so a hire that works against a locally packed
+> tarball works unchanged against the registry copy.
 
 ESM only. Node ≥ 18 or any runtime with WebCrypto, `fetch` and `TextEncoder`.
 Two runtime dependencies: `tweetnacl` and `tweetnacl-util`.

@@ -1,6 +1,6 @@
 {
   "name": "@voidly/session",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Client for the Voidly Pay session rail: private hire, verify-only settlement on Base. The rail never holds, custodies or submits funds — the payee relays its own settlement and the verifier's only I/O is read-only JSON-RPC.",
   "type": "module",
   "repository": {
