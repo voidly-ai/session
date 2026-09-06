@@ -125,6 +125,30 @@ describe("Sessions-first public exercise", () => {
     catch (error) { expect(error).toBeInstanceOf(PublicExerciseError); expect(String(error)).not.toContain("SECRET_URL"); return; }
     throw new Error("did not refuse");
   });
+  it.each([0, 1])("bounds an endless stream of immediate %s-byte chunks", async size => {
+    let reads = 0; const cancel = vi.fn();
+    const fetchImpl = vi.fn(async () => new Response(new ReadableStream<Uint8Array>({
+      pull(controller) { reads++; controller.enqueue(new Uint8Array(size).fill(32)); }, cancel,
+    }), { headers: { "content-type": "application/json" } }));
+    await expect(runPublicExercise(JSON.stringify(exercise()), { fetchImpl, nowMs: NOW })).rejects.toThrow("upstream_too_large");
+    expect(reads).toBeLessThanOrEqual(size === 0 ? 131 : 2050); expect(cancel).toHaveBeenCalledTimes(1);
+  });
+  it("enforces a monotonic deadline between reads", async () => {
+    let time = 0; vi.spyOn(performance, "now").mockImplementation(() => time);
+    const fetchImpl = vi.fn(async () => new Response(new ReadableStream<Uint8Array>({
+      pull(controller) { time += 8001; controller.enqueue(new Uint8Array(1)); },
+    }), { headers: { "content-type": "application/json" } }));
+    await expect(runPublicExercise(JSON.stringify(exercise()), { fetchImpl, nowMs: NOW })).rejects.toThrow("upstream_unavailable");
+  });
+  it("cancels a late fetch response after its deadline", async () => {
+    vi.useFakeTimers(); let resolve!: (value: Response) => void;
+    const fetchImpl = vi.fn(() => new Promise<Response>(done => { resolve = done; }));
+    const work = runPublicExercise(JSON.stringify(exercise()), { fetchImpl, nowMs: NOW });
+    const refusal = expect(work).rejects.toThrow("upstream_unavailable");
+    await vi.advanceTimersByTimeAsync(8001); await refusal;
+    const cancel = vi.fn(); resolve(new Response(new ReadableStream({ cancel }), { headers: { "content-type": "application/json" } }));
+    await Promise.resolve(); await Promise.resolve(); expect(cancel).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("saved-proof artwork parity", () => {

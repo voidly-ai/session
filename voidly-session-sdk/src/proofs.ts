@@ -131,14 +131,24 @@ async function readFixedJson(url: string, maxBytes: number, fetchImpl: typeof fe
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  let response: Response | undefined;
+  const deadlineAt = performance.now() + 8000;
   const deadline = new Promise<never>((_, reject) => {
     timer = setTimeout(() => { controller.abort(); reject(new PublicExerciseError("upstream_unavailable")); }, 8000);
   });
   try {
-    const response = await Promise.race([fetchImpl(url, {
+    const fetched = Promise.resolve(fetchImpl(url, {
       method: "GET", headers: { accept: "application/json" }, redirect: "error",
       credentials: "omit", cache: "no-store", referrerPolicy: "no-referrer", signal: controller.signal,
-    }), deadline]);
+    })).then(value => {
+      if (controller.signal.aborted) {
+        if (value.body && !value.body.locked) void value.body.cancel().catch(() => {});
+        throw new PublicExerciseError("upstream_unavailable");
+      }
+      return value;
+    });
+    response = await Promise.race([fetched, deadline]);
+    requireCondition(performance.now() < deadlineAt, "upstream_unavailable");
     requireCondition(!response.redirected && (response.url === "" || response.url === url), "upstream_redirect");
     requireCondition(response.ok && response.body, "upstream_unavailable");
     requireCondition(/^application\/json(?:\s*;|$)/i.test(response.headers.get("content-type") ?? ""), "upstream_not_json");
@@ -146,10 +156,14 @@ async function readFixedJson(url: string, maxBytes: number, fetchImpl: typeof fe
     requireCondition(contentLength === null || /^\d+$/.test(contentLength) && Number(contentLength) <= maxBytes, "upstream_too_large");
     reader = response.body.getReader();
     const chunks: Uint8Array[] = [];
-    let size = 0;
+    let size = 0; let reads = 0; let emptyReads = 0;
     for (;;) {
+      requireCondition(performance.now() < deadlineAt, "upstream_unavailable");
+      requireCondition(++reads <= 2048, "upstream_too_large");
       const part = await Promise.race([reader.read(), deadline]);
+      requireCondition(performance.now() < deadlineAt, "upstream_unavailable");
       if (part.done) break;
+      if (part.value.byteLength === 0) { requireCondition(++emptyReads <= 128, "upstream_too_large"); continue; }
       size += part.value.byteLength;
       requireCondition(size <= maxBytes, "upstream_too_large");
       chunks.push(part.value);
@@ -165,6 +179,7 @@ async function readFixedJson(url: string, maxBytes: number, fetchImpl: typeof fe
   } finally {
     clearTimeout(timer); controller.abort();
     if (reader) { void reader.cancel().catch(() => {}); reader.releaseLock(); }
+    else if (response?.body && !response.body.locked) void response.body.cancel().catch(() => {});
   }
 }
 

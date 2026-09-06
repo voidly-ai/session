@@ -303,5 +303,11 @@ flatten({
   surfaceSpelledAs: "src/proofs.ts",
   minPublicExports: 10,
 });
+flatten({
+  entryDtsName: "proofsAuto.d.ts",
+  outFileName: "proofsAuto.d.ts",
+  surfaceSpelledAs: "src/proofsAuto.ts",
+  minPublicExports: 5,
+});
 
 rmSync(STAGE, { recursive: true, force: true });

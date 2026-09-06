@@ -24,6 +24,7 @@ function bundle(entrySrc, outName) {
       "--legal-comments=none",
       "--external:tweetnacl",
       "--external:tweetnacl-util",
+      ...(entrySrc === "src/proofsCli.ts" ? ["--external:node:fs", "--external:node:fs/promises", "--external:node:path"] : []),
       `--outfile=${join(DIST, outName)}`,
       "--log-level=warning",
     ],
@@ -33,6 +34,7 @@ function bundle(entrySrc, outName) {
 bundle("src/index.ts", "index.mjs");
 bundle("src/breakEven.ts", "breakEven.mjs");
 bundle("src/proofs.ts", "proofs.mjs");
+bundle("src/proofsAuto.ts", "proofsAuto.mjs");
 bundle("src/proofsCli.ts", "proofsCli.mjs");
 
 execFileSync(process.execPath, [join(PKG_DIR, "scripts/build-types.mjs")], {
@@ -63,9 +65,10 @@ function fixTweetnaclUtilNamedImports(outName) {
 fixTweetnaclUtilNamedImports("index.mjs");
 fixTweetnaclUtilNamedImports("breakEven.mjs");
 fixTweetnaclUtilNamedImports("proofs.mjs");
+fixTweetnaclUtilNamedImports("proofsAuto.mjs");
 fixTweetnaclUtilNamedImports("proofsCli.mjs");
 
-for (const name of ["proofs.mjs", "proofsCli.mjs"]) {
+for (const name of ["proofs.mjs", "proofsAuto.mjs", "proofsCli.mjs"]) {
   const file = join(DIST, name);
   const readable = execFileSync(toolBin("esbuild", PKG_DIR), [
     "--format=esm", "--target=es2021", "--legal-comments=none", "--log-level=warning",
@@ -83,6 +86,7 @@ function assertNativeNodeImport(outName, minExports) {
 assertNativeNodeImport("index.mjs", 50);
 assertNativeNodeImport("breakEven.mjs", 8);
 assertNativeNodeImport("proofs.mjs", 10);
+assertNativeNodeImport("proofsAuto.mjs", 5);
 
 const js = statSync(join(DIST, "index.mjs")).size;
 const dts = statSync(join(DIST, "index.d.ts")).size;

@@ -22,12 +22,12 @@ Two runtime dependencies: `tweetnacl` and `tweetnacl-util`.
 
 ## Try Sessions without a wallet
 
-The Proofs commands in version 1.1.0 exercise the SDK without payment. Review
+The Proofs commands in version 1.2.0 exercise the SDK without payment. Review
 the package and source before installing or running it. The CLI requires Node
 20.3 or newer.
 
 ```bash
-npm install --ignore-scripts --save-exact @voidly/session@1.1.0
+npm install --ignore-scripts --save-exact @voidly/session@1.2.0
 node node_modules/@voidly/session/dist/proofsCli.mjs self-test
 ```
 
@@ -36,9 +36,13 @@ reads public challenge JSON from stdin, checks the fixed public provider index
 and signed manifest, and prints a result. Neither command needs a secret,
 wallet or browser recovery key. Do not disable an agent's protections to run it.
 
-At [Voidpay Proofs](https://voidly.ai/pay/proofs), the browser provides that public
-challenge and asks you to review and save the returned result. Saving, publishing
-and sharing remain separate user actions. A saved proof checks this limited
+At [Voidpay Proofs](https://voidly.ai/pay/proofs), the automatic flow authorizes
+one private passing proof and supplies an instruction for your coding agent.
+The `complete` command reads that short-lived, limited permission from stdin,
+runs the public check, verifies the saved receipt and generates matching artwork.
+It does not receive your collection-control key. Publishing and sharing remain
+separate user actions. Older public-check/manual-save instructions still work.
+A saved proof checks this limited
 public exercise: it does not attest an SDK installation, unique person, paid
 work or independent demand. See the
 [SDK command documentation](voidly-session-sdk/README.md) for the exact behavior.

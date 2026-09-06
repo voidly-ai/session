@@ -121,7 +121,7 @@ try {
 
 const DIST = join(PKG_DIR, "dist");
 const sourceNewest = newestMtime(inputs);
-for (const stem of ["index", "breakEven", ...(pkg.exports?.["./proofs"] ? ["proofs"] : [])]) {
+for (const stem of ["index", "breakEven", ...(pkg.exports?.["./proofs"] ? ["proofs"] : []), ...(pkg.exports?.["./proofs-auto"] ? ["proofsAuto"] : [])]) {
   const entry = join(DIST, `${stem}.mjs`);
   const types = join(DIST, `${stem}.d.ts`);
   if (!existsSync(entry) || !existsSync(types)) {

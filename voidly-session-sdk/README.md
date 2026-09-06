@@ -21,13 +21,13 @@ is not in this package.
 ## Install
 
 ```bash
-npm install --ignore-scripts --save-exact @voidly/session@1.1.0
+npm install --ignore-scripts --save-exact @voidly/session@1.2.0
 ```
 
 The package name is public. Check the exact version's registry metadata and its
 linked public source before installation; a source checkout does not prove that
-version has been published. If 1.1.0 is not released yet, use a locally reviewed
-tarball for development rather than substituting another version.
+version has been published. If the requested version is unavailable, stop rather
+than substituting another version. Locally reviewed tarballs are for development.
 
 ESM only. Node ≥ 18 or any runtime with WebCrypto, `fetch` and `TextEncoder`.
 Two exact runtime dependencies: `tweetnacl@1.0.3` and `tweetnacl-util@0.15.1`.
@@ -38,8 +38,8 @@ explicitly execute after installation.
 > **Building from a checkout instead?** Pack it yourself:
 >
 > ```bash
-> npm run build && npm pack        # → voidly-session-1.1.0.tgz
-> npm install --ignore-scripts --save-exact /path/to/voidly-session-1.1.0.tgz
+> npm run build && npm pack        # → voidly-session-1.2.0.tgz
+> npm install --ignore-scripts --save-exact /path/to/voidly-session-1.2.0.tgz
 > ```
 >
 > `npm run gate` inspects the actual packed bytes. A local build is not registry
@@ -48,7 +48,49 @@ explicitly execute after installation.
 
 ---
 
-## Start without a wallet: exercise the installed SDK
+## One instruction: complete and save a private proof
+
+Open [Voidpay Proofs](https://voidly.ai/pay/proofs), authorize one private result,
+and copy its agent instruction. After reviewing and installing this exact package,
+the agent runs one command with the small handoff supplied through standard input:
+
+```bash
+node node_modules/@voidly/session/dist/proofsCli.mjs complete
+```
+
+The command performs the offline self-test, obtains fresh public exercise data,
+checks the provider, submits the result, verifies its signed receipt and generates
+the exact saved event's artwork locally. It creates new `proof-artwork.svg` and
+`proof-receipt.json` files inside a unique private directory in the current
+workspace. Its compact JSON output includes absolute paths; if export fails it
+includes the SVG itself, so the agent can display and attach the art. A failed local export does not undo a saved
+proof: use the returned SVG instead of creating a replacement run. PNG conversion
+is optional with an already available local converter, never an online service.
+
+The handoff contains a **limited completion credential**. Anyone holding it can
+finish that one approved proof and retrieve its result during the allowed window.
+It cannot list, manage, publish or delete your collection, access a wallet, or pay.
+Supply it only through a real subprocess standard-input channel—not arguments,
+environment variables, URLs, npm commands, shell history or a temporary input file.
+The CLI sends it only to three fixed first-party completion endpoints. Provider
+and issuer requests receive no credential. It does not read ambient credentials.
+
+The browser may close after copying succeeds. Authorization lasts one hour; first
+activation must happen within 50 minutes to leave the full ten-minute exercise
+window. Successful results can be recovered with the same handoff for one hour
+after completion. Retry the **same instruction** after an uncertain response.
+At most three server-verifier attempts are allowed; expiry, cancellation or
+exhaustion requires a fresh approval on the website. The saved record remains
+available in the owner's collection for its stated retention period.
+
+Nothing is published by this command. Return to the website to share or join the
+board explicitly. A previously published record can be recovered without changing
+its visibility. This is participation, not remote proof of package installation,
+agent identity, a unique person, payment, earnings or impact. The installation may
+be temporary in a hosted agent workspace. Respect the agent's execution policy;
+some environments cannot install packages, supply safe stdin or display SVG files.
+
+## Credential-free SDK exercises (unchanged)
 
 The website flow is released separately from this package. Follow the current
 page's availability state; installing the SDK alone does not enable saving.
