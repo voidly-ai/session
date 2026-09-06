@@ -1,5 +1,6 @@
 import nacl from "tweetnacl";
-import { canonicalBytes, sha256Hex } from "./index";
+import { sha256Hex } from "./index";
+import { automaticCanonicalJson } from "./automaticCanonical";
 import { parsePublicExercise, proofArtworkSvg, PublicExerciseError, runPublicExercise, runSessionsSelfTest,
   SESSIONS_PROOFS_PROVIDER, SESSIONS_PROOFS_TASK, type PublicExercise } from "./proofs";
 
@@ -192,9 +193,9 @@ async function verifyComplete(value: unknown, handoff: AutomaticHandoff, fetchIm
   requireCondition(exercise.challenge_id === handoff.run_id && Date.parse(exercise.issued_at) <= Date.parse(s.checked_at)
     && Date.parse(exercise.expires_at) > Date.parse(s.completed_at)
     && await sha256Hex(new TextEncoder().encode(AUTOMATIC_RUN_BINDING_DOMAIN + handoff.run_id)) === s.run_binding_sha256
-    && await sha256Hex(canonicalBytes(exercise)) === s.exercise_binding_sha256, "receipt_invalid");
+    && await sha256Hex(new TextEncoder().encode(automaticCanonicalJson(exercise))) === s.exercise_binding_sha256, "receipt_invalid");
   const keys = await issuerKeys(handoff, fetchImpl); const key = keys.get(s.key_id);
-  requireCondition(key && nacl.sign.detached.verify(new TextEncoder().encode(AUTOMATIC_RECEIPT_DOMAIN + new TextDecoder().decode(canonicalBytes(s))), unhex(receipt.signature_hex), unhex(key)), "receipt_invalid");
+  requireCondition(key && nacl.sign.detached.verify(new TextEncoder().encode(AUTOMATIC_RECEIPT_DOMAIN + automaticCanonicalJson(s)), unhex(receipt.signature_hex), unhex(key)), "receipt_invalid");
   const svg = proofArtworkSvg(record.event_id);
   const result: VerifiedAutomaticProof = { schema: "voidly.session.automatic-proof/v1", ok: true, saved_proof: true,
     event_id: record.event_id, visibility: record.visibility, already_completed: value.already_completed,

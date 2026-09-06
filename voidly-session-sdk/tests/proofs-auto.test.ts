@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { canonicalBytes, sha256Hex } from "../src/index";
+import { automaticCanonicalJson } from "../src/automaticCanonical";
 import { AUTOMATIC_BASE, AUTOMATIC_HANDOFF_SCHEMA, AUTOMATIC_ISSUER, AUTOMATIC_TASK, completeAutomaticProof, parseAutomaticHandoff } from "../src/proofsAuto";
 import { proofArtworkSvg, SESSIONS_PROOFS_PROVIDER } from "../src/proofs";
-import { automaticFixture, AUTO_NOW, PUBLIC_MANIFEST } from "./_automaticFixture";
+import { automaticFixture, AUTO_NOW, PUBLIC_MANIFEST, collectionFixtureJson } from "./_automaticFixture";
 
 type Fixture = Awaited<ReturnType<typeof automaticFixture>>;
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
@@ -26,6 +27,17 @@ function server(f: Fixture, override?: (url: string, init: RequestInit, count: n
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe("automatic Sessions public contract", () => {
+  it("uses null-preserving collection canonical JSON without changing session envelopes", () => {
+    const value = { z: null, a: [{ z: null, a: [null, 1, false, "quoted\"value"] }, null] };
+    const expected = '{"a":[{"a":[null,1,false,"quoted\\\"value"],"z":null},null],"z":null}';
+    expect(automaticCanonicalJson(value)).toBe(expected);
+    expect(collectionFixtureJson(value)).toBe(expected);
+    expect(new TextDecoder().decode(canonicalBytes(value))).not.toBe(expected);
+    expect(new TextDecoder().decode(canonicalBytes({ reward_asset: null, decision: "STOP" }))).toBe('{"decision":"STOP"}');
+  });
+  it.each([undefined, NaN, Infinity, 1.5, 1n, new Date(0)])("refuses non-collection JSON values: %s", value => {
+    expect(() => automaticCanonicalJson(value)).toThrow("Unsupported automatic collection JSON value");
+  });
   it("accepts only the fixed small handoff and copies its accepted fields", async () => {
     const f = await automaticFixture();
     expect(parseAutomaticHandoff(JSON.stringify(f.handoff))).toEqual(f.handoff);
@@ -47,12 +59,26 @@ describe("automatic Sessions public contract", () => {
     expect(result.saved_proof).toBe(true); expect(result.visibility).toBe("private"); expect(result.already_completed).toBe(false);
     expect(result.artwork.svg).toBe(proofArtworkSvg(f.record.event_id));
     expect(result.artwork.sha256).toBe(await sha256Hex(new TextEncoder().encode(result.artwork.svg)));
-    expect(result.receipt.statement.exercise_binding_sha256).toBe(await sha256Hex(canonicalBytes(f.exercise)));
+    expect(result.receipt.statement.exercise_binding_sha256).toBe(await sha256Hex(new TextEncoder().encode(collectionFixtureJson(f.exercise))));
+    expect(automaticCanonicalJson(f.exercise)).toBe(collectionFixtureJson(f.exercise));
+    expect(automaticCanonicalJson(f.exercise)).toBe(new TextDecoder().decode(canonicalBytes(f.exercise)));
     expect(JSON.stringify(result)).not.toContain(f.handoff.completion_capability);
     const posted = fetchImpl.mock.calls.find(([url]) => url === AUTOMATIC_BASE + "/submit")!;
     const body = JSON.parse(String(posted[1]?.body));
     expect(Object.keys(body)).toEqual(["run_id", "result"]);
     expect(body.result.manifest_digest_sha256).toBe("7155546c67df54bc2ebb0b7aab7f8f4b5ff7d3d487fddad77d5e4076ed5f3b1c");
+  });
+  it("accepts the collection signature that includes reward_asset:null", async () => {
+    const f = await automaticFixture();
+    expect(f.receipt.statement.boundary.reward_asset).toBeNull();
+    const result = await completeAutomaticProof(JSON.stringify(f.handoff), { fetchImpl: server(f), nowMs: AUTO_NOW });
+    expect(result.receipt.statement.boundary.reward_asset).toBeNull();
+  });
+  it("rejects a signature made after silently dropping the null reward_asset", async () => {
+    const f = await automaticFixture();
+    const incorrectlyCanonicalized = JSON.parse(new TextDecoder().decode(canonicalBytes(f.receipt.statement)));
+    f.receipt.signature_hex = f.sign(incorrectlyCanonicalized);
+    await expect(completeAutomaticProof(JSON.stringify(f.handoff), { fetchImpl: server(f), nowMs: AUTO_NOW })).rejects.toMatchObject({ code: "receipt_invalid" });
   });
   it("sends the capability only to three fixed v4 endpoints, never to issuer/provider/body/URL", async () => {
     const f = await automaticFixture(); const fetchImpl = server(f);

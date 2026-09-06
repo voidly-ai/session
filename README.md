@@ -22,12 +22,12 @@ Two runtime dependencies: `tweetnacl` and `tweetnacl-util`.
 
 ## Try Sessions without a wallet
 
-The Proofs commands in version 1.2.0 exercise the SDK without payment. Review
+The Proofs commands in version 1.2.1 exercise the SDK without payment. Review
 the package and source before installing or running it. The CLI requires Node
 20.3 or newer.
 
 ```bash
-npm install --ignore-scripts --save-exact @voidly/session@1.2.0
+npm install --ignore-scripts --save-exact @voidly/session@1.2.1
 node node_modules/@voidly/session/dist/proofsCli.mjs self-test
 ```
 

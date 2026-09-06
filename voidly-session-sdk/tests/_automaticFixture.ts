@@ -1,5 +1,5 @@
 import nacl from "tweetnacl";
-import { canonicalBytes, sha256Hex } from "../src/index";
+import { sha256Hex } from "../src/index";
 import { AUTOMATIC_BOUNDARY, AUTOMATIC_HANDOFF_SCHEMA, AUTOMATIC_ISSUER, AUTOMATIC_RECEIPT_DOMAIN,
   AUTOMATIC_RUN_BINDING_DOMAIN, AUTOMATIC_SCOPE, AUTOMATIC_TASK } from "../src/proofsAuto";
 import { PUBLIC_EXERCISE_SCHEMA, SESSIONS_PROOFS_PROVIDER, SESSIONS_PROOFS_TASK } from "../src/proofs";
@@ -24,6 +24,14 @@ export const PUBLIC_MANIFEST = {
   ], signature_base64: "IsCAew3Gc7HozZip2BsLBEyay4XEhNJZCAgpWyLQklC0CVC1EmMZDLSi1pbImF97TdVoaaSVOWc27UGY9l7uAQ==",
 };
 const hex = (bytes: Uint8Array) => Array.from(bytes, value => value.toString(16).padStart(2, "0")).join("");
+export function collectionFixtureJson(value: unknown): string {
+  const ordered = (input: unknown): unknown => {
+    if (input === null || typeof input !== "object") return input;
+    if (Array.isArray(input)) return input.map(ordered);
+    return Object.fromEntries(Object.keys(input).sort().map(key => [key, ordered((input as Record<string, unknown>)[key])]));
+  };
+  return JSON.stringify(ordered(value));
+}
 export async function automaticFixture(now = AUTO_NOW) {
   const pair = nacl.sign.keyPair.fromSeed(new Uint8Array(32).fill(7));
   const handoff = { schema: AUTOMATIC_HANDOFF_SCHEMA, run_id: "a".repeat(32), completion_capability: "b".repeat(64) };
@@ -33,12 +41,12 @@ export async function automaticFixture(now = AUTO_NOW) {
   const key = { issuer: AUTOMATIC_ISSUER, key_id: await sha256Hex(pair.publicKey), algorithm: "Ed25519", public_key_hex: hex(pair.publicKey), status: "active" };
   const statement = { schema: "voidpay.proof-collection.receipt/v4", issuer: AUTOMATIC_ISSUER, key_id: key.key_id, event_id: event,
     run_binding_sha256: await sha256Hex(new TextEncoder().encode(AUTOMATIC_RUN_BINDING_DOMAIN + handoff.run_id)),
-    exercise_binding_sha256: await sha256Hex(canonicalBytes(exercise)), artwork: { recipe: "contours-v1", seed: event },
+    exercise_binding_sha256: await sha256Hex(new TextEncoder().encode(collectionFixtureJson(exercise))), artwork: { recipe: "contours-v1", seed: event },
     task: AUTOMATIC_TASK, computation_task: SESSIONS_PROOFS_TASK, checked_at: new Date(now).toISOString(), completed_at: new Date(now + 1).toISOString(), outcome: "PASS",
     checks: { server: { owner_preauthorized: true, challenge_unexpired: true, provider_pair_listed: true, manifest_verified: true, wrong_pin_refused: true },
       claimant: { manifest_digest_matches: true, challenge_response_matches: true } },
     provider: { provider_did: SESSIONS_PROOFS_PROVIDER.provider_did, manifest_url: SESSIONS_PROOFS_PROVIDER.manifest_url }, scope: AUTOMATIC_SCOPE, boundary: AUTOMATIC_BOUNDARY };
-  const sign = (value: unknown) => hex(nacl.sign.detached(new TextEncoder().encode(AUTOMATIC_RECEIPT_DOMAIN + new TextDecoder().decode(canonicalBytes(value))), pair.secretKey));
+  const sign = (value: unknown) => hex(nacl.sign.detached(new TextEncoder().encode(AUTOMATIC_RECEIPT_DOMAIN + collectionFixtureJson(value)), pair.secretKey));
   const receipt = { statement, signature_hex: sign(statement) };
   const record = { event_id: event, visibility: "private", public_url: null as string | null,
     expires_at: new Date(now + 1 + 15552000000).toISOString(), receipt };
