@@ -89,6 +89,7 @@ async function requestJson(kind: AutomaticRequest, handoff: AutomaticHandoff, bo
     requireCondition(performance.now() < deadlineAt, "completion_unavailable");
     requireCondition(!response.redirected && response.type !== "opaqueredirect" && (response.url === "" || response.url === url)
       && response.status !== 0 && !(response.status >= 300 && response.status < 400), "response_invalid");
+    if (response.status >= 500) throw new AutomaticHttpError("completion_unavailable", response.status);
     requireCondition(/^application\/json(?:\s*;|$)/i.test(response.headers.get("content-type") ?? "") && response.body, "response_invalid");
     const length = response.headers.get("content-length");
     requireCondition(length === null || /^\d+$/.test(length) && Number(length) <= MAX_RESPONSE_BYTES, "response_invalid");

@@ -21,7 +21,7 @@ is not in this package.
 ## Install
 
 ```bash
-npm install --ignore-scripts --save-exact @voidly/session@1.2.1
+npm install --ignore-scripts --save-exact @voidly/session@1.2.2
 ```
 
 The package name is public. Check the exact version's registry metadata and its
@@ -38,8 +38,8 @@ explicitly execute after installation.
 > **Building from a checkout instead?** Pack it yourself:
 >
 > ```bash
-> npm run build && npm pack        # → voidly-session-1.2.1.tgz
-> npm install --ignore-scripts --save-exact /path/to/voidly-session-1.2.1.tgz
+> npm run build && npm pack        # → voidly-session-1.2.2.tgz
+> npm install --ignore-scripts --save-exact /path/to/voidly-session-1.2.2.tgz
 > ```
 >
 > `npm run gate` inspects the actual packed bytes. A local build is not registry
