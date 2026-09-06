@@ -120,6 +120,22 @@ describe("automatic Sessions public contract", () => {
     expect(fetchImpl.mock.calls.filter(call => call[0] === AUTOMATIC_BASE + "/submit")).toHaveLength(1);
     expect(JSON.stringify(result)).not.toContain("private_network_diagnostic");
   });
+  it("recovers the same saved event after an HTML 502 submit response without submitting twice", async () => {
+    const f = await automaticFixture(); let submitted = false;
+    const fetchImpl = server(f, url => {
+      if (url === AUTOMATIC_BASE + "/submit") {
+        submitted = true;
+        return new Response("<html>Temporary gateway failure</html>", { status: 502, headers: { "content-type": "text/html" } });
+      }
+      if (url === AUTOMATIC_BASE + "/result" && submitted) return json({ ...f.complete, already_completed: true });
+    });
+    const result = await completeAutomaticProof(JSON.stringify(f.handoff), { fetchImpl, nowMs: AUTO_NOW });
+    expect(result.saved_proof).toBe(true); expect(result.already_completed).toBe(true);
+    expect(result.event_id).toBe(f.record.event_id); expect(result.receipt).toEqual(f.receipt);
+    expect(fetchImpl.mock.calls.filter(call => call[0] === AUTOMATIC_BASE + "/submit")).toHaveLength(1);
+    expect(fetchImpl.mock.calls.filter(call => call[0] === AUTOMATIC_BASE + "/result")).toHaveLength(2);
+    expect(JSON.stringify(result)).not.toContain("Temporary gateway failure");
+  });
   it("never submits a fourth attempt and reports uncertain saving honestly", async () => {
     const f = await automaticFixture();
     const fetchImpl = server(f, url => url === AUTOMATIC_BASE + "/submit" ? failure() : undefined);
