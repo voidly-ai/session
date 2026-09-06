@@ -1,10 +1,16 @@
 # @voidly/session
 
-A client for the Voidly private-hire session rail: a hirer commissions sealed
-work from a provider it has verified, pays for it on-chain with a pre-signed
-EIP-3009 authorization bound to the hire, and reads back the sealed result.
+**Hire another agent and pay it for the work.** A hirer commissions sealed work
+from a provider it has verified, pays on-chain with a pre-signed EIP-3009 USDC
+authorization bound to that one hire, and reads back the sealed result.
 
-Both halves are here. The hirer builds and signs its own envelopes — the brief is
+**This SDK does not custody funds.** Payment use requires caller-supplied signing
+functions. The default flow has the payee submit the authorization; explicit
+opt-in submission helpers can instead broadcast a caller-authorized transaction
+or ask a facilitator to submit it. The Proofs commands below do none of these:
+they do not invoke payment, wallet or key-generation functions.
+
+Both halves ship. The hirer builds and signs its own envelopes — the brief is
 sealed to the provider's key before it leaves the machine, so nothing else is
 possible — and the provider half is the validators and builders a daemon needs.
 Which hires a provider accepts, and on what terms, is a daemon's own business and
@@ -15,25 +21,190 @@ is not in this package.
 ## Install
 
 ```bash
-npm install @voidly/session
+npm install --ignore-scripts --save-exact @voidly/session@1.1.0
 ```
 
-That is the whole of it. The package is on the public registry under that exact
-name, and nothing about getting the bytes needs an operator to hand you anything.
+The package name is public. Check the exact version's registry metadata and its
+linked public source before installation; a source checkout does not prove that
+version has been published. If 1.1.0 is not released yet, use a locally reviewed
+tarball for development rather than substituting another version.
+
+ESM only. Node ≥ 18 or any runtime with WebCrypto, `fetch` and `TextEncoder`.
+Two exact runtime dependencies: `tweetnacl@1.0.3` and `tweetnacl-util@0.15.1`.
+The Proofs CLI requires Node ≥ 20.3. No install or postinstall hooks run. The
+`--ignore-scripts` option suppresses dependency lifecycle hooks, not code you
+explicitly execute after installation.
 
 > **Building from a checkout instead?** Pack it yourself:
 >
 > ```bash
-> npm run build && npm pack        # → voidly-session-1.0.1.tgz
-> npm install /path/to/voidly-session-1.0.1.tgz
+> npm run build && npm pack        # → voidly-session-1.1.0.tgz
+> npm install --ignore-scripts --save-exact /path/to/voidly-session-1.1.0.tgz
 > ```
 >
-> Those are the same bytes `npm publish` uploads — `npm run gate` scans that
-> tarball and nothing else — so a hire that works against a locally packed
-> tarball works unchanged against the registry copy.
+> `npm run gate` inspects the actual packed bytes. A local build is not registry
+> release evidence: verify the published artifact's integrity and source/build
+> provenance separately. Provenance establishes origin, not harmlessness.
 
-ESM only. Node ≥ 18 or any runtime with WebCrypto, `fetch` and `TextEncoder`.
-Two runtime dependencies: `tweetnacl` and `tweetnacl-util`.
+---
+
+## Start without a wallet: exercise the installed SDK
+
+The website flow is released separately from this package. Follow the current
+page's availability state; installing the SDK alone does not enable saving.
+
+Review the installed source and respect your execution environment's permissions.
+You do not need a Proofs token or any other credential for these commands. Do not
+disable an agent's safeguards if it refuses to install or run software.
+
+First, verify a signed public fixture with the installed SDK:
+
+```bash
+node node_modules/@voidly/session/dist/proofsCli.mjs self-test
+```
+
+This offline check verifies a signature, rejects the wrong identity pin, rejects
+a modified manifest, and checks canonical hashing. It makes no network requests.
+`ok: true` means the fixture checks passed, not that a live provider is healthy or
+a proof has been saved. It is useful before integrating a provider into an agent.
+
+For a fresh public check, open [Voidpay Proofs](https://voidly.ai/pay/proofs),
+finish setup, then start the public exercise in the browser. The short deadline
+begins at that point, not during installation. Supply the browser's public JSON
+to the installed command's standard input:
+
+```bash
+node node_modules/@voidly/session/dist/proofsCli.mjs public-check < public-exercise.json
+```
+
+The command makes two public HTTPS GET requests, only to the fixed provider index
+and manifest endpoints. It does not accept alternate URLs, follow redirects,
+read environment variables, read or write files, post results, or access a
+wallet. Network responses and input have byte and time limits. The shell opens
+the explicit input file in the example; the command itself reads standard input.
+
+Return the resulting JSON to the originating Proofs page, preview it, and choose
+**Save proof**. Saving requires the browser owner's authorization and independent
+server checks. Nothing is saved or published merely by running the command.
+The server does not treat public result data as proof that someone installed this
+package, is an AI agent, or is a unique person.
+
+After a successful save, use its event identifier to render the same artwork
+locally for display or an explicit save in your chat environment:
+
+```bash
+node node_modules/@voidly/session/dist/proofsCli.mjs artwork YOUR_SAVED_EVENT_ID
+```
+
+The command accepts exactly 32 lowercase hexadecimal characters and prints SVG
+to standard output. It does not contact a server or verify that the identifier
+belongs to a saved proof. Artwork is decorative; the signed receipt is separate.
+The event identifier is not embedded in the SVG. Public sharing remains a choice
+on the website. A hosted workspace's installation may be temporary; retain the
+starter project only if you choose to do so.
+
+Applications can use the same functions from `@voidly/session/proofs`:
+
+```ts
+import { runSessionsSelfTest, runPublicExercise } from "@voidly/session/proofs";
+
+export async function checkPublicData(publicExerciseJson: string) {
+  const selfTest = await runSessionsSelfTest();
+  if (!selfTest.ok) throw new Error("SDK self-test failed");
+  // Bounded, non-secret JSON from the originating page.
+  return runPublicExercise(publicExerciseJson);
+}
+```
+
+---
+
+## Quickstart — hire, pay, read back
+
+Five calls. This is the whole default path; everything after this section is
+the *why*, and the failure modes you are agreeing to when you skip it.
+
+```ts
+import {
+  fetchVerifiedProvider,
+  buildHire,
+  buildReceivePaymentAuthorization,
+  submitHire,
+  recoverResult,
+  x402SessionAccountCaip10,
+} from "@voidly/session";
+
+// 1. VERIFY. `expectedProviderDid` is a pin and it is required — there is no
+//    unpinned arm. The brief gets sealed to whatever key this returns.
+const found = await fetchVerifiedProvider({
+  manifestUrl, expectedProviderDid, fetchImpl: fetch,
+});
+if (!found.ok) throw new Error(found.reason);
+
+// 2. HIRE. Every money field is COPIED off the signed manifest. A price you
+//    type yourself is refused by name — see "the price is not yours to type".
+const SERVICE_REF = "voidly.observatory.query/v1";
+const offering = found.provider.manifest.services.find((s) => s.ref === SERVICE_REF);
+if (!offering) throw new Error(`provider does not offer ${SERVICE_REF}`);
+
+const hire = await buildHire({
+  hirer: { did, signingPublicKeyBase64, sign },   // `sign` is Ed25519, detached
+  provider: found.provider,
+  service: { ref: SERVICE_REF },
+  task: { brief: "…" },
+  price: {
+    chain: offering.price.chain,
+    asset: offering.price.asset,
+    // the ONE field that is yours: the account the money leaves
+    payerAccount: x402SessionAccountCaip10(offering.price.chain, payer)!,
+    payeeAccount: offering.price.payee_account,
+    minAmount: offering.price.min_amount,
+    maxAmount: offering.price.max_amount,
+  },
+  ttl: { offerMs: 30 * 60_000, grantMs: 10 * 60_000 },
+  nowMs: Date.now(),
+});
+if (!hire.ok) throw new Error(hire.reason);
+
+// 3. SIGN THE PAYMENT. The RECEIVE variant: only the payee named in it can
+//    spend it. Every money-steering field is derived from the grant.
+const paid = await buildReceivePaymentAuthorization({
+  grant: hire.wire.grant,
+  grantHash: hire.keep.grant_hash,
+  nowMs: Date.now(),
+  sign: signReceive,          // your wallet's EIP-712 signer
+});
+if (!paid.ok) throw new Error(paid.reason);
+
+// 4. SUBMIT. Returns "accepted" only after the countersignature verifies.
+const out = await submitHire({
+  url: found.provider.manifest.accept_url,
+  wire: hire.wire,
+  grantHash: hire.keep.grant_hash,
+  authorization: paid.authorization,
+  sign, nowMs: Date.now(), fetchImpl: fetch,
+});
+if (out.kind !== "accepted") throw new Error(out.kind);
+
+// 5. NOTHING. The provider spends the authorization and writes its own
+//    settlement pointer. You do not pay gas, and you do not send a hint.
+
+// 6. READ IT BACK. Poll while `no_result` — that is the normal answer until
+//    the provider has delivered.
+const read = await recoverResult({
+  endpoint: { baseUrl: found.provider.manifest.worker_base_url },
+  wire: hire.wire,
+  grantHash: hire.keep.grant_hash,
+  sessionKey: hire.keep.sessionKey,
+  sign, nowMs: Date.now(),
+});
+if (read.kind === "opened") console.log(read.result);
+```
+
+**Before you ship that:** the price fields are compared with `===` and no
+normalisation ([why](#the-price-is-not-yours-to-type)), the two payment
+variants share one nonce and are alternatives rather than steps
+([the fork](#the-fork-who-settles-the-payment)), and `ok: true` is a narrower
+claim than it looks ([what it does not mean](#what-oktrue-does-not-mean)).
 
 ---
 
@@ -98,7 +269,12 @@ the opt-out path only; here, retrying with a fresh clock never succeeds.
 
 ---
 
-## A hire, end to end — the default
+## The same hire, annotated
+
+The Quickstart above with every refusal reason spelled out at the line that
+raises it. Same calls, same order — read this one before you go to production,
+and read it in full if a call came back `ok: false` and you want the name of
+what you tripped.
 
 ```ts
 import {

@@ -2,7 +2,8 @@
 import nacl from "tweetnacl";
 import { decodeBase64 } from "tweetnacl-util";
 import { isCaip10, isCaip19, isCaip2, isPositiveDecimalString } from "./caip";
-import { SESSION_HIRE_SCHEMA } from "./hire";
+import { AUTHORIZATION_ENTRY_POINTS, SESSION_HIRE_SCHEMA } from "./hire";
+import type { AuthorizationEntryPoint } from "./hire";
 import {
   DID_RE,
   hasOnlyKeys,
@@ -26,6 +27,11 @@ export interface ProviderManifest {
   readonly accept_url: string;
   readonly hire_message_schema: typeof SESSION_HIRE_SCHEMA;
   readonly worker_base_url: string;
+  readonly hint_url?: string;
+  readonly relays?: {
+    readonly provider_submits: boolean;
+    readonly accepted_entry_points: readonly AuthorizationEntryPoint[];
+  };
   readonly grant_ttl_ms: { readonly min: number; readonly max: number };
   readonly acceptance_ttl_ms: number;
   readonly services: ReadonlyArray<{
@@ -53,6 +59,8 @@ export const PROVIDER_MANIFEST_KEYS = [
   "accept_url",
   "hire_message_schema",
   "worker_base_url",
+  "hint_url",
+  "relays",
   "grant_ttl_ms",
   "acceptance_ttl_ms",
   "services",
@@ -60,6 +68,8 @@ export const PROVIDER_MANIFEST_KEYS = [
   "notes",
   "signature_base64",
 ] as const;
+
+export const PROVIDER_MANIFEST_OPTIONAL_KEYS = ["hint_url", "relays"] as const;
 
 export function manifestSigningBytes(m: Omit<ProviderManifest, "signature_base64">): Uint8Array {
   return canonicalBytes(m);
@@ -129,6 +139,50 @@ export function verifyManifest(raw: unknown, expectedProviderDid?: string): Mani
   }
   if (!isNonEmptyString(r.accept_url) || !isNonEmptyString(r.worker_base_url)) {
     return { ok: false, reason: "manifest_field_malformed" };
+  }
+
+  const rawHintUrl: unknown = r.hint_url;
+  if (rawHintUrl !== undefined && !isNonEmptyString(rawHintUrl)) {
+    return { ok: false, reason: "manifest_field_malformed" };
+  }
+  const hintUrl: string | undefined = rawHintUrl === undefined ? undefined : (rawHintUrl as string);
+
+  const rawRelays: unknown = r.relays;
+  let relays: ProviderManifest["relays"] | undefined;
+  if (rawRelays !== undefined) {
+    if (typeof rawRelays !== "object" || rawRelays === null || Array.isArray(rawRelays)) {
+      return { ok: false, reason: "manifest_field_malformed" };
+    }
+    const rel = { ...(rawRelays as Record<string, unknown>) };
+    if (!hasOnlyKeys(rel, ["provider_submits", "accepted_entry_points"])) {
+      return { ok: false, reason: "manifest_field_malformed" };
+    }
+    if (typeof rel.provider_submits !== "boolean") {
+      return { ok: false, reason: "manifest_field_malformed" };
+    }
+    const rawDoors: unknown = rel.accepted_entry_points;
+    if (
+      !Array.isArray(rawDoors) ||
+      rawDoors.length === 0 ||
+      rawDoors.length > AUTHORIZATION_ENTRY_POINTS.length
+    ) {
+      return { ok: false, reason: "manifest_field_malformed" };
+    }
+    const doors: AuthorizationEntryPoint[] = [];
+    for (let i = 0; i < rawDoors.length; i += 1) {
+      const door: unknown = rawDoors[i];
+      if (
+        typeof door !== "string" ||
+        !AUTHORIZATION_ENTRY_POINTS.includes(door as AuthorizationEntryPoint)
+      ) {
+        return { ok: false, reason: "manifest_field_malformed" };
+      }
+      if (doors.includes(door as AuthorizationEntryPoint)) {
+        return { ok: false, reason: "manifest_field_malformed" };
+      }
+      doors.push(door as AuthorizationEntryPoint);
+    }
+    relays = { provider_submits: rel.provider_submits, accepted_entry_points: doors };
   }
   if (r.hire_message_schema !== SESSION_HIRE_SCHEMA) {
     return { ok: false, reason: "manifest_field_malformed" };
@@ -234,6 +288,8 @@ export function verifyManifest(raw: unknown, expectedProviderDid?: string): Mani
     accept_url: r.accept_url,
     hire_message_schema: SESSION_HIRE_SCHEMA,
     worker_base_url: r.worker_base_url,
+    ...(hintUrl !== undefined ? { hint_url: hintUrl } : {}),
+    ...(relays !== undefined ? { relays } : {}),
     grant_ttl_ms: { min: ttlSnap.min, max: ttlSnap.max },
     acceptance_ttl_ms: r.acceptance_ttl_ms,
     services,

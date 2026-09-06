@@ -44,6 +44,8 @@ export interface ProviderConfig {
   readonly minGrantTtlMs: number;
   readonly maxGrantTtlMs: number;
   readonly acceptanceTtlMs: number;
+  readonly hintUrl?: string;
+  readonly relays?: ProviderManifest["relays"];
 }
 
 export const FIXTURE_ATTESTOR_PUBLIC_KEY = nacl.sign.keyPair.fromSeed(
@@ -60,6 +62,8 @@ export function buildManifest(keys: ProviderKeys, config: ProviderConfig): Provi
     accept_url: config.acceptUrl,
     hire_message_schema: SESSION_HIRE_SCHEMA,
     worker_base_url: config.workerBaseUrl,
+    ...(config.hintUrl !== undefined ? { hint_url: config.hintUrl } : {}),
+    ...(config.relays !== undefined ? { relays: config.relays } : {}),
     grant_ttl_ms: { min: config.minGrantTtlMs, max: config.maxGrantTtlMs },
     acceptance_ttl_ms: config.acceptanceTtlMs,
     services: config.services.map((s) => ({

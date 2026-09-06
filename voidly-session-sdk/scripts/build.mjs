@@ -32,6 +32,8 @@ function bundle(entrySrc, outName) {
 }
 bundle("src/index.ts", "index.mjs");
 bundle("src/breakEven.ts", "breakEven.mjs");
+bundle("src/proofs.ts", "proofs.mjs");
+bundle("src/proofsCli.ts", "proofsCli.mjs");
 
 execFileSync(process.execPath, [join(PKG_DIR, "scripts/build-types.mjs")], {
   cwd: PKG_DIR,
@@ -60,6 +62,16 @@ function fixTweetnaclUtilNamedImports(outName) {
 }
 fixTweetnaclUtilNamedImports("index.mjs");
 fixTweetnaclUtilNamedImports("breakEven.mjs");
+fixTweetnaclUtilNamedImports("proofs.mjs");
+fixTweetnaclUtilNamedImports("proofsCli.mjs");
+
+for (const name of ["proofs.mjs", "proofsCli.mjs"]) {
+  const file = join(DIST, name);
+  const readable = execFileSync(toolBin("esbuild", PKG_DIR), [
+    "--format=esm", "--target=es2021", "--legal-comments=none", "--log-level=warning",
+  ], { input: readFileSync(file, "utf8"), encoding: "utf8", cwd: PKG_DIR });
+  writeFileSync(file, readable);
+}
 
 function assertNativeNodeImport(outName, minExports) {
   execFileSync(
@@ -70,6 +82,7 @@ function assertNativeNodeImport(outName, minExports) {
 }
 assertNativeNodeImport("index.mjs", 50);
 assertNativeNodeImport("breakEven.mjs", 8);
+assertNativeNodeImport("proofs.mjs", 10);
 
 const js = statSync(join(DIST, "index.mjs")).size;
 const dts = statSync(join(DIST, "index.d.ts")).size;

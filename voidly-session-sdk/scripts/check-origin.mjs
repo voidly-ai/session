@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 const PKG_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const INPUT_DIRS = ["src", "scripts", "../session-protocol/src"];
-const INPUT_FILES = ["package.json", "README.md", "LICENSE", ".npmignore"];
+const INPUT_FILES = ["package.json", "package-lock.json", "../package-lock.json", "README.md", "LICENSE", ".npmignore"];
 
 function git(args, cwd = PKG_DIR) {
   return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
@@ -66,11 +66,12 @@ if (relToRoot.length === 0) {
 
 let untracked = [];
 try {
-  const out = execFileSync("git", ["ls-files", "--others", "--exclude-standard", "--", ...relToRoot], {
+  const out = execFileSync("git", ["ls-files", "--", ...relToRoot], {
     cwd: root,
     encoding: "utf8",
   });
-  untracked = out.split("\n").filter(Boolean);
+  const tracked = new Set(out.split("\n").filter(Boolean));
+  untracked = relToRoot.filter(path => !tracked.has(path));
 } catch (e) {
   note(`git could not list untracked files: ${String(e)}`);
 }
@@ -120,7 +121,7 @@ try {
 
 const DIST = join(PKG_DIR, "dist");
 const sourceNewest = newestMtime(inputs);
-for (const stem of ["index", "breakEven"]) {
+for (const stem of ["index", "breakEven", ...(pkg.exports?.["./proofs"] ? ["proofs"] : [])]) {
   const entry = join(DIST, `${stem}.mjs`);
   const types = join(DIST, `${stem}.d.ts`);
   if (!existsSync(entry) || !existsSync(types)) {
@@ -134,6 +135,12 @@ for (const stem of ["index", "breakEven"]) {
           "true about the wrong artifact. Run `npm run build`.",
       );
     }
+  }
+}
+for (const target of Object.values(pkg.bin ?? {})) {
+  const executable = join(PKG_DIR, target);
+  if (!existsSync(executable) || statSync(executable).mtimeMs < sourceNewest) {
+    note(`CLI ${target} IS ABSENT OR OLDER THAN ITS SOURCES — run \`npm run build\` before publishing`);
   }
 }
 

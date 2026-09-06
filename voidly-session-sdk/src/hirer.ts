@@ -676,8 +676,58 @@ export async function submitHire(input: {
   });
 }
 
+export type SettlementHintTargetSource = "manifest" | "caller";
+
+export type ProviderHintUrlVerdict =
+  | { readonly ok: true; readonly url: string; readonly source: SettlementHintTargetSource }
+  | { readonly ok: false; readonly reason: ProviderHintUrlRefusal; readonly detail: string };
+
+export type ProviderHintUrlRefusal =
+  | "hint_url_unpublished"
+  | "hint_url_conflict";
+
+export type SettlementHintTarget =
+  | { readonly provider: VerifiedProvider; readonly url?: string }
+  | { readonly provider?: undefined; readonly url: string };
+
+function resolveSettlementHintTarget(input: {
+  readonly provider?: VerifiedProvider;
+  readonly url?: string;
+}):
+  | { readonly ok: true; readonly url: string; readonly source: SettlementHintTargetSource }
+  | { readonly ok: false; readonly reason: SubmitSettlementHintRefusal } {
+  const pasted = typeof input.url === "string" && input.url.length > 0 ? input.url : undefined;
+  if (input.provider === undefined) {
+    if (pasted === undefined) return { ok: false, reason: "hint_url_unpublished" };
+    return { ok: true, url: pasted, source: "caller" };
+  }
+  const published = providerHintUrl(input.provider);
+  if (!published.ok) {
+    if (pasted === undefined) return { ok: false, reason: "hint_url_unpublished" };
+    return { ok: true, url: pasted, source: "caller" };
+  }
+  if (pasted !== undefined && pasted !== published.url) {
+    return { ok: false, reason: "hint_url_conflict" };
+  }
+  return { ok: true, url: published.url, source: published.source };
+}
+
+export function providerHintUrl(provider: VerifiedProvider): ProviderHintUrlVerdict {
+  const published = provider.manifest.hint_url;
+  if (typeof published !== "string" || published.length === 0) {
+    return {
+      ok: false,
+      reason: "hint_url_unpublished",
+      detail: "this provider's signed manifest names no hint door",
+    };
+  }
+  return { ok: true, url: published, source: "manifest" };
+}
+
 export type SubmitSettlementHintRefusal =
   | "grant_hash_mismatch"
+  | "hint_url_unpublished"
+  | "hint_url_conflict"
   | "provider_did_unusable"
   | "evidence_unusable"
   | "signature_failed";
@@ -696,7 +746,8 @@ const MAX_HINT_REFUSAL_WORD_LENGTH = 128;
 const HINT_MEDIA_TYPE = "application/json";
 
 export async function submitSettlementHint(input: {
-  readonly url: string;
+  readonly provider?: VerifiedProvider;
+  readonly url?: string;
   readonly grant: TaskGrantEnvelope;
   readonly grantHash: string;
   readonly evidence: unknown;
@@ -704,7 +755,10 @@ export async function submitSettlementHint(input: {
   readonly nowMs: number;
   readonly fetchImpl: FetchLike;
   readonly signal?: AbortSignal;
-}): Promise<SubmitSettlementHintResult> {
+} & SettlementHintTarget): Promise<SubmitSettlementHintResult> {
+  const target = resolveSettlementHintTarget(input);
+  if (!target.ok) return { kind: "unbuildable", reason: target.reason };
+
   const anchor = await checkGrantHashAnchor(input.grant, input.grantHash);
   if (anchor !== null) return { kind: "unbuildable", reason: anchor };
 
@@ -741,7 +795,7 @@ export async function submitSettlementHint(input: {
 
   let response: Response;
   try {
-    response = await input.fetchImpl(input.url, {
+    response = await input.fetchImpl(target.url, {
       method: "POST",
       headers: { "content-type": HINT_MEDIA_TYPE, accept: HINT_MEDIA_TYPE },
       body: payload,

@@ -26,57 +26,49 @@ function rebuildDocumentDeep(document: ProviderManifest): ProviderManifest {
   const top = containerCopy(document);
   if (top === null) return document;
 
-  const window = containerCopy(top.grant_ttl_ms);
-  if (window !== null) top.grant_ttl_ms = window;
+  const made = new Map<object, Record<string, unknown>>();
+  made.set(document as unknown as object, top);
 
-  const rawNotes: unknown = top.notes;
-  if (Array.isArray(rawNotes)) {
-    const count = rawNotes.length;
-    const notes: unknown[] = [];
-    for (let i = 0; i < count; i += 1) {
-      const note: unknown = rawNotes[i];
-      const frame = containerCopy(note);
-      notes.push(frame === null ? note : frame);
-    }
-    top.notes = notes;
-  }
-
-  const rawServices: unknown = top.services;
-  if (Array.isArray(rawServices)) {
-    const count = rawServices.length;
-    const services: unknown[] = [];
-    for (let i = 0; i < count; i += 1) {
-      const entry: unknown = rawServices[i];
-      const offering = containerCopy(entry);
-      if (offering === null) {
-        services.push(entry);
+  const pending: Record<string, unknown>[] = [top];
+  while (pending.length > 0) {
+    const frame = pending.pop();
+    if (frame === undefined) break;
+    for (const key of Object.keys(frame)) {
+      const child: unknown = frame[key];
+      if (child === null || typeof child !== "object") continue;
+      const already = made.get(child as object);
+      if (already !== undefined) {
+        frame[key] = already;
         continue;
       }
-      const price = containerCopy(offering.price);
-      if (price !== null) offering.price = price;
-      services.push(offering);
+      const copy = containerCopy(child);
+      if (copy === null) continue;
+      made.set(child as object, copy);
+      frame[key] = copy;
+      pending.push(copy);
     }
-    top.services = services;
   }
 
   return top as unknown as ProviderManifest;
 }
 
 function freezeManifestDeep(m: ProviderManifest): ProviderManifest {
-  if (m === null || typeof m !== "object") return m;
-  Object.freeze(m.grant_ttl_ms);
-  Object.freeze(m.notes);
-  const services: unknown = m.services;
-  if (Array.isArray(services)) {
-    for (const offering of services) {
-      if (offering !== null && typeof offering === "object") {
-        Object.freeze((offering as { price?: unknown }).price);
-      }
-      Object.freeze(offering);
+  const seen = new Set<object>();
+  const pending: unknown[] = [m];
+  while (pending.length > 0) {
+    const node: unknown = pending.pop();
+    if (node === null || typeof node !== "object") continue;
+    const container = node as object;
+    if (seen.has(container)) continue;
+    seen.add(container);
+    Object.freeze(container);
+    for (const key of Reflect.ownKeys(container)) {
+      if (typeof key === "symbol") continue;
+      const d = Object.getOwnPropertyDescriptor(container, key);
+      if (d !== undefined && "value" in d) pending.push(d.value);
     }
   }
-  Object.freeze(services);
-  return Object.freeze(m);
+  return m;
 }
 
 export function mintVerifiedProvider(manifest: ProviderManifest): VerifiedProvider {

@@ -297,5 +297,11 @@ flatten({
   surfaceSpelledAs: "src/breakEven.ts",
   minPublicExports: 10,
 });
+flatten({
+  entryDtsName: "proofs.d.ts",
+  outFileName: "proofs.d.ts",
+  surfaceSpelledAs: "src/proofs.ts",
+  minPublicExports: 10,
+});
 
 rmSync(STAGE, { recursive: true, force: true });

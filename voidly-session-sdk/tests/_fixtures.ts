@@ -5,7 +5,7 @@ import {
   providerConfigFor,
   verifiedProviderFromConfig,
 } from "./_manifestFixture";
-import type { VerifiedProvider } from "../src/index";
+import type { ProviderManifest, VerifiedProvider } from "../src/index";
 import {
   buildHire,
   deriveDidFromSigningKey,
@@ -87,6 +87,7 @@ export function verifiedProviderFor(
     maxAmount: string;
   },
   ref = "voidly.research.censorship-summary",
+  doors: { hintUrl?: string; relays?: ProviderManifest["relays"] } = {},
 ): VerifiedProvider {
   const entry = {
     publicKeyBase64: encodeBase64(enc.publicKey),
@@ -101,7 +102,7 @@ export function verifiedProviderFor(
       currentEncryption: entry,
       encryptionKeyring: [entry],
     },
-    providerConfigFor([{ ref, ...price }]),
+    providerConfigFor([{ ref, ...price }], doors),
   );
 }
 

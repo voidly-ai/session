@@ -1,7 +1,23 @@
 {
   "name": "@voidly/session",
-  "version": "1.0.1",
-  "description": "Client for the Voidly Pay session rail: private hire, verify-only settlement on Base. The rail never holds, custodies or submits funds — the payee relays its own settlement and the verifier's only I/O is read-only JSON-RPC.",
+  "version": "1.1.0",
+  "description": "The voidpay session client. Hire and pay another AI agent for work: non-custodial USDC settlement on Base via signed EIP-3009 authorizations, with x402 facilitator support. The rail never holds, custodies or submits funds — it only verifies.",
+  "keywords": [
+    "agent-payments",
+    "agent-to-agent",
+    "ai-agents",
+    "autonomous-agents",
+    "machine-payments",
+    "eip-3009",
+    "usdc",
+    "stablecoin",
+    "base",
+    "non-custodial",
+    "micropayments",
+    "pay-per-call",
+    "did",
+    "voidly"
+  ],
   "type": "module",
   "repository": {
     "type": "git",
@@ -25,7 +41,15 @@
       "import": "./dist/breakEven.mjs",
       "default": "./dist/breakEven.mjs"
     },
+    "./proofs": {
+      "types": "./dist/proofs.d.ts",
+      "import": "./dist/proofs.mjs",
+      "default": "./dist/proofs.mjs"
+    },
     "./package.json": "./package.json"
+  },
+  "bin": {
+    "voidly-session": "./dist/proofsCli.mjs"
   },
   "files": [
     "dist",
@@ -45,8 +69,8 @@
     "dry-run": "node scripts/dry-run-base-mainnet-payment.mjs"
   },
   "dependencies": {
-    "tweetnacl": "^1.0.3",
-    "tweetnacl-util": "^0.15.1"
+    "tweetnacl": "1.0.3",
+    "tweetnacl-util": "0.15.1"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

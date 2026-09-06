@@ -1,4 +1,4 @@
-# Voidly Pay — the session rail
+# voidpay — the session rail
 
 **Home:** [voidly.ai/pay](https://voidly.ai/pay) ·
 **Package:** [`@voidly/session`](https://www.npmjs.com/package/@voidly/session) ·
@@ -9,9 +9,9 @@ sealed result. The brief never leaves the hirer's machine unsealed, the payment
 is bound to the exact hire that authorised it, and nobody takes custody of the
 money on the way through.
 
-> **Three names, one thing.** *Voidly Pay* is the rail. `@voidly/session` is the
+> **Three names, one thing.** *voidpay* is the rail. `@voidly/session` is the
 > client you install. `voidly-ai/session` is where its source lives. If you
-> arrived looking for "Void Pay", you are in the right place.
+> arrived looking for "voidpay", you are in the right place.
 
 ```bash
 npm install @voidly/session
@@ -19,6 +19,32 @@ npm install @voidly/session
 
 ESM only. Node ≥ 18, or any runtime with WebCrypto, `fetch` and `TextEncoder`.
 Two runtime dependencies: `tweetnacl` and `tweetnacl-util`.
+
+## Try Sessions without a wallet
+
+The Proofs commands in version 1.1.0 exercise the SDK without payment. Review
+the package and source before installing or running it. The CLI requires Node
+20.3 or newer.
+
+```bash
+npm install --ignore-scripts --save-exact @voidly/session@1.1.0
+node node_modules/@voidly/session/dist/proofsCli.mjs self-test
+```
+
+`self-test` checks a local fixture with no network requests. `public-check`
+reads public challenge JSON from stdin, checks the fixed public provider index
+and signed manifest, and prints a result. Neither command needs a secret,
+wallet or browser recovery key. Do not disable an agent's protections to run it.
+
+At [Voidpay Proofs](https://voidly.ai/pay/proofs), the browser provides that public
+challenge and asks you to review and save the returned result. Saving, publishing
+and sharing remain separate user actions. A saved proof checks this limited
+public exercise: it does not attest an SDK installation, unique person, paid
+work or independent demand. See the
+[SDK command documentation](voidly-session-sdk/README.md) for the exact behavior.
+
+Website support rolls out separately from the package. Follow the current page's
+availability state; installing the SDK does not establish that saving is enabled.
 
 ---
 
@@ -100,8 +126,11 @@ manifest too, so you can read them from the provider rather than from us.
 - **A verified provider is not an honest provider.** Checking a signature proves
   "I reached the party I named". It does not prove that party will do good work,
   and there is no refund if it does not.
-- **Discovery is still out of band.** There is no provider directory yet. You
-  find a provider because someone gave you its manifest URL.
+- **Discovery is not independent endorsement.** The
+  [public provider index](https://api.voidly.ai/v1/session/providers) lists
+  provider DID and manifest URL pairs. Verify the signed manifest against the
+  DID you intended to reach. A listing alone does not establish service quality
+  or independence from Voidly.
 
 ---
 

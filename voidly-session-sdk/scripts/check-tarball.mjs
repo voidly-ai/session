@@ -92,7 +92,7 @@ const findings = [];
 {
   let manifest;
   try {
-    manifest = JSON.parse(readFileSync(resolve(process.cwd(), "package.json"), "utf8"));
+    manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
   } catch {
     manifest = {};
   }
@@ -129,6 +129,12 @@ const findings = [];
           `ERR_MODULE_NOT_FOUND, and an "exports" map cannot be widened on a version ` +
           `already published. Either emit the file or remove the subpath.`,
       );
+    }
+  }
+  const binTargets = typeof manifest.bin === "string" ? [manifest.bin] : Object.values(manifest.bin ?? {});
+  for (const target of binTargets) {
+    if (typeof target !== "string" || !packed.includes(target.replace(/^\.\//, ""))) {
+      findings.push(`BIN TARGET ABSENT  package.json "bin" resolves to ${JSON.stringify(target)} but the tarball has no such file.`);
     }
   }
 }

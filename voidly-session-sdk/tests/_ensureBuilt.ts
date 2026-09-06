@@ -22,7 +22,7 @@ function pause(ms: number): void {
 }
 
 function isStale(pkgDir: string): boolean {
-  const outputs = ["index.mjs", "index.d.ts", "breakEven.mjs", "breakEven.d.ts"].map((f) =>
+  const outputs = ["index.mjs", "index.d.ts", "breakEven.mjs", "breakEven.d.ts", "proofs.mjs", "proofs.d.ts", "proofsCli.mjs"].map((f) =>
     join(pkgDir, "dist", f),
   );
   if (!outputs.every((p) => existsSync(p))) return true;
