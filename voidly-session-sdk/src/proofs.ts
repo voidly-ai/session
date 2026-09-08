@@ -1,4 +1,4 @@
-import { canonicalBytes, sha256Hex, verifyProvider } from "./index";
+import { canonicalBytes, sha256Hex, verifyProvider } from "./protocol";
 import { PROOFS_FIXTURE, PROOFS_FIXTURE_DIGEST } from "./proofsFixture";
 export { proofArtworkSvg } from "./proofsArtwork";
 
