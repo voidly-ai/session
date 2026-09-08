@@ -344,3 +344,8 @@ export type {
   Validated,
   X402SessionEvidence,
 } from "./protocol";
+
+export { createPaymentContext, checkPaymentSignRequest, verifyPaymentSignature, checkPaymentSubmitRequest } from "./paymentContext";
+export type { PaymentContext, PaymentContextRefusal, PaymentEntryPoint, PaymentTypedData } from "./paymentContext";
+export { verifySettlement } from "./settlementVerification";
+export type { VerifySettlementInput, SettlementVerificationSuccess, SettlementVerificationResult } from "./settlementVerification";

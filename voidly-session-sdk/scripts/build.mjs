@@ -1,23 +1,42 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { isAbsolute, join, resolve, sep } from "node:path";
+import { pathToFileURL } from "node:url";
 import { toolBin } from "./_toolBin.mjs";
 
 const PKG_DIR = resolve(new URL("..", import.meta.url).pathname);
 const DIST = join(PKG_DIR, "dist");
+let boundary;
+let guard;
+if (process.env.VOIDLY_BOUNDARY_METADATA_DIR || process.env.VOIDLY_BOUNDARY_CAPTURE_MODULE) {
+  try {
+    const external = process.env.VOIDLY_BOUNDARY_CAPTURE_MODULE;
+    if (!process.env.VOIDLY_BOUNDARY_METADATA_DIR) throw new Error("metadata required");
+    if (external && (!isAbsolute(external) || resolve(external) !== external || realpathSync(external) !== external
+      || external.startsWith(resolve(PKG_DIR, "..") + sep) || !statSync(external).isFile())) {
+      throw new Error("external capture module refused");
+    }
+    const hooks = await import(external ? pathToFileURL(external).href : "../../tools/private-source-boundary/capture.mjs");
+    guard = hooks.guarded;
+    boundary = guard(() => hooks.beginBuild(PKG_DIR, process.env.VOIDLY_BOUNDARY_METADATA_DIR, toolBin("esbuild", PKG_DIR)));
+  } catch {
+    console.error("Private source boundary setup refused.");
+    process.exit(1);
+  }
+}
 
 rmSync(DIST, { recursive: true, force: true });
 mkdirSync(DIST, { recursive: true });
 
 function bundle(entrySrc, outName) {
-  execFileSync(
-    toolBin("esbuild", PKG_DIR),
+  const compile = () => execFileSync(
+    boundary ? boundary.esbuildExecutable() : toolBin("esbuild", PKG_DIR),
     [
       join(PKG_DIR, entrySrc),
       "--bundle",
       "--format=esm",
-      "--platform=neutral",
+      entrySrc === "src/index.ts" ? "--platform=browser" : "--platform=neutral",
       "--target=es2021",
       "--minify-whitespace",
       "--minify-syntax",
@@ -25,22 +44,31 @@ function bundle(entrySrc, outName) {
       "--external:tweetnacl",
       "--external:tweetnacl-util",
       ...(entrySrc === "src/proofsCli.ts" ? ["--external:node:fs", "--external:node:fs/promises", "--external:node:path"] : []),
+      ...(entrySrc === "src/nodeFiles.ts" ? ["--external:node:fs", "--external:node:path"] : []),
       `--outfile=${join(DIST, outName)}`,
+      ...(boundary ? [`--metafile=${boundary.metafilePath(outName.slice(0, -4))}`] : []),
+      ...(boundary ? [`--tsconfig=${boundary.tsconfigPath()}`] : []),
       "--log-level=warning",
     ],
-    { cwd: PKG_DIR, stdio: ["ignore", "inherit", "inherit"] },
+    { cwd: PKG_DIR, stdio: boundary ? ["ignore", "pipe", "pipe"] : ["ignore", "inherit", "inherit"] },
   );
+  if (boundary) guard(compile);
+  else compile();
+  if (boundary) guard(() => boundary.recordRuntime(outName.slice(0, -4)));
 }
 bundle("src/index.ts", "index.mjs");
 bundle("src/breakEven.ts", "breakEven.mjs");
 bundle("src/proofs.ts", "proofs.mjs");
 bundle("src/proofsAuto.ts", "proofsAuto.mjs");
 bundle("src/proofsCli.ts", "proofsCli.mjs");
+bundle("src/nodeFiles.ts", "nodeFiles.mjs");
 
-execFileSync(process.execPath, [join(PKG_DIR, "scripts/build-types.mjs")], {
+const buildDeclarations = () => execFileSync(process.execPath, [join(PKG_DIR, "scripts/build-types.mjs")], {
   cwd: PKG_DIR,
-  stdio: ["ignore", "inherit", "inherit"],
+  stdio: boundary ? ["ignore", "pipe", "pipe"] : ["ignore", "inherit", "inherit"],
 });
+if (boundary) guard(buildDeclarations);
+else buildDeclarations();
 
 function fixTweetnaclUtilNamedImports(outName) {
   const file = join(DIST, outName);
@@ -67,12 +95,14 @@ fixTweetnaclUtilNamedImports("breakEven.mjs");
 fixTweetnaclUtilNamedImports("proofs.mjs");
 fixTweetnaclUtilNamedImports("proofsAuto.mjs");
 fixTweetnaclUtilNamedImports("proofsCli.mjs");
+fixTweetnaclUtilNamedImports("nodeFiles.mjs");
 
-for (const name of ["proofs.mjs", "proofsAuto.mjs", "proofsCli.mjs"]) {
+for (const name of ["proofs.mjs", "proofsAuto.mjs", "proofsCli.mjs", "nodeFiles.mjs"]) {
   const file = join(DIST, name);
-  const readable = execFileSync(toolBin("esbuild", PKG_DIR), [
+  const format = () => execFileSync(boundary ? boundary.esbuildExecutable() : toolBin("esbuild", PKG_DIR), [
     "--format=esm", "--target=es2021", "--legal-comments=none", "--log-level=warning",
   ], { input: readFileSync(file, "utf8"), encoding: "utf8", cwd: PKG_DIR });
+  const readable = boundary ? guard(format) : format();
   writeFileSync(file, readable);
 }
 
@@ -87,6 +117,8 @@ assertNativeNodeImport("index.mjs", 50);
 assertNativeNodeImport("breakEven.mjs", 8);
 assertNativeNodeImport("proofs.mjs", 10);
 assertNativeNodeImport("proofsAuto.mjs", 5);
+assertNativeNodeImport("nodeFiles.mjs", 3);
+if (boundary) guard(() => boundary.finishBuild());
 
 const js = statSync(join(DIST, "index.mjs")).size;
 const dts = statSync(join(DIST, "index.d.ts")).size;

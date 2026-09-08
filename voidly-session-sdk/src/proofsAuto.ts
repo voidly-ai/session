@@ -1,5 +1,5 @@
 import nacl from "tweetnacl";
-import { sha256Hex } from "./index";
+import { sha256Hex } from "./protocol";
 import { automaticCanonicalJson } from "./automaticCanonical";
 import { parsePublicExercise, proofArtworkSvg, PublicExerciseError, runPublicExercise, runSessionsSelfTest,
   SESSIONS_PROOFS_PROVIDER, SESSIONS_PROOFS_TASK, type PublicExercise } from "./proofs";

@@ -1,18 +1,38 @@
 #!/usr/bin/env node
 import { createRequire } from "node:module";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { pathToFileURL } from "node:url";
 import { toolBin } from "./_toolBin.mjs";
 
 const PKG_DIR = resolve(new URL("..", import.meta.url).pathname);
 const require_ = createRequire(join(PKG_DIR, "package.json"));
 const ts = require_("typescript");
+let boundary;
+let guard;
+if (process.env.VOIDLY_BOUNDARY_METADATA_DIR || process.env.VOIDLY_BOUNDARY_CAPTURE_MODULE) {
+  try {
+    const external = process.env.VOIDLY_BOUNDARY_CAPTURE_MODULE;
+    if (!process.env.VOIDLY_BOUNDARY_METADATA_DIR) throw new Error("metadata required");
+    if (external && (!isAbsolute(external) || resolve(external) !== external || realpathSync(external) !== external
+      || external.startsWith(resolve(PKG_DIR, "..") + sep) || !statSync(external).isFile())) {
+      throw new Error("external capture module refused");
+    }
+    const hooks = await import(external ? pathToFileURL(external).href : "../../tools/private-source-boundary/capture.mjs");
+    guard = hooks.guarded;
+    boundary = guard(() => hooks.resumeBuild(PKG_DIR, process.env.VOIDLY_BOUNDARY_METADATA_DIR));
+  } catch {
+    console.error("Private source boundary setup refused.");
+    process.exit(1);
+  }
+}
 
 const STAGE = mkdtempSync(join(tmpdir(), "voidly-session-dts-"));
 try {
-  execFileSync(
+  if (boundary) guard(() => boundary.emitDeclarations(ts, STAGE));
+  else execFileSync(
     toolBin("tsc", PKG_DIR),
     [
       "-p", "tsconfig.build.json",
@@ -68,6 +88,7 @@ function resolveSpecifier(fromFile, spec) {
 
 const TABLES = new Map();
 function tableFor(file) {
+  if (boundary) guard(() => boundary.observeDeclaration(file));
   const cached = TABLES.get(file);
   if (cached) return cached;
   const sf = SOURCES.get(file);
@@ -198,6 +219,7 @@ function rootOf(entityName) {
 const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed, removeComments: true });
 
 function flatten({ entryDtsName, outFileName, surfaceSpelledAs, minPublicExports }) {
+  if (boundary) guard(() => boundary.beginDeclaration(entryDtsName.slice(0, -5)));
   const entry = findEmitted(entryDtsName);
   const PUBLIC = publicSurfaceOf(entry);
   if (PUBLIC.size < minPublicExports) {
@@ -279,6 +301,7 @@ function flatten({ entryDtsName, outFileName, surfaceSpelledAs, minPublicExports
     console.error(`emitted file does not mention ${missing.length} public export(s): ${missing.join(", ")}`);
     process.exit(1);
   }
+  if (boundary) guard(() => boundary.finishDeclaration());
   console.log(
     `dist/${outFileName} — ${PUBLIC.size} public exports, ${COLLECTED.size} declarations, ` +
       `${(statSync(target).size / 1024).toFixed(1)} kB`,
@@ -308,6 +331,13 @@ flatten({
   outFileName: "proofsAuto.d.ts",
   surfaceSpelledAs: "src/proofsAuto.ts",
   minPublicExports: 5,
+});
+
+flatten({
+  entryDtsName: "nodeFiles.d.ts",
+  outFileName: "nodeFiles.d.ts",
+  surfaceSpelledAs: "src/nodeFiles.ts",
+  minPublicExports: 3,
 });
 
 rmSync(STAGE, { recursive: true, force: true });

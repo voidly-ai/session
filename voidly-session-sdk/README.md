@@ -21,7 +21,7 @@ is not in this package.
 ## Install
 
 ```bash
-npm install --ignore-scripts --save-exact @voidly/session@1.2.2
+npm install --ignore-scripts --save-exact @voidly/session@1.3.0
 ```
 
 The package name is public. Check the exact version's registry metadata and its
@@ -38,8 +38,8 @@ explicitly execute after installation.
 > **Building from a checkout instead?** Pack it yourself:
 >
 > ```bash
-> npm run build && npm pack        # → voidly-session-1.2.2.tgz
-> npm install --ignore-scripts --save-exact /path/to/voidly-session-1.2.2.tgz
+> npm run build && npm pack        # → voidly-session-1.3.0.tgz
+> npm install --ignore-scripts --save-exact /path/to/voidly-session-1.3.0.tgz
 > ```
 >
 > `npm run gate` inspects the actual packed bytes. A local build is not registry
@@ -47,6 +47,23 @@ explicitly execute after installation.
 > provenance separately. Provenance establishes origin, not harmlessness.
 
 ---
+
+## 1.3.0 release notes
+
+- `@voidly/session/node-files` adds capped reads and create-once writes with
+  complete-write verification, readback and directory durability.
+- `createPaymentContext` snapshots complete grant terms. `checkPaymentSignRequest`,
+  `verifyPaymentSignature` and `checkPaymentSubmitRequest` check the approved
+  request, recover the payer and bind exact submission data to the context.
+- `verifySettlement` checks receipt agreement across every selected RPC operator,
+  payment logs and block identity. It requires at least 12 blocks of depth from
+  the lowest head; success reports RPC quorum inclusion with safe/finalized
+  status unchecked. Unpinned RPC use requires explicit opt-in and stays labeled.
+
+Browser receipt reads also require `performance.now()`, `ReadableStream` and
+`AbortController`. These additions preserve existing wire signatures and builders.
+Provider policy, consent and signing/submission authority remain the caller's
+responsibility. The two exact runtime dependencies are unchanged.
 
 ## One instruction: complete and save a private proof
 
@@ -716,5 +733,122 @@ The grant covers a patent licence and terminates for anyone who brings a
 patent action over this work. Trademarks are not granted — section 6.
 
 The two runtime dependencies, `tweetnacl` and `tweetnacl-util`, are public
-domain (Unlicense) and are marked external at build time, so the published
-bundle contains no third-party code.
+domain (Unlicense) and remain external at build time. The root bundle also
+includes MIT-licensed signature-recovery code from the pinned Ethers build
+dependency; its upstream licenses and attribution are retained in `NOTICE`.
+
+## Node-only bounded local files
+
+`@voidly/session/node-files` is a separate Node-only entry introduced in 1.3.0.
+It is not exported from the browser-compatible package root.
+
+```js
+import { readFileCapped, writeNewVerifiedFile } from "@voidly/session/node-files";
+
+const bytes = readFileCapped("./private-input.json", 64 * 1024, { requirePrivate: true });
+writeNewVerifiedFile("./new-output.json", bytes);
+```
+
+`readFileCapped(path, cap, options)` reads an unchanged regular file through its
+checked descriptor, refusing symlinks, replacement, growth past the cap and
+uncertain close. Caps are positive integers up to 1 MiB. `requirePrivate: true`
+refuses group/other mode permissions; it does not inspect ACLs.
+
+`writeNewVerifiedFile(path, bytes, options)` accepts a Buffer up to 2 MiB,
+creates a new 0600 file without overwriting, completes partial writes, verifies
+its bytes and identity, and checks file and parent-directory synchronization
+and descriptor closure. The parent directory must already exist. Optional
+`aliases` are paths that must still identify the written file. Errors are
+`LocalFileError` instances with a bounded `code` and optional `bytes` count;
+messages omit file contents, paths and operating-system error text.
+
+Unsupported no-follow/nonblocking/directory primitives cause refusal. A failed
+write can leave a partial file for explicit recovery; it is not automatically
+removed. Path checks detect observed movement without providing an atomic
+directory lease. Checked `fsync` is operating-system synchronization, not a
+universal power-loss guarantee. These helpers do not change the keep-file
+format or the existing persistence APIs.
+
+### Approve and retain an exact payment context
+
+`createPaymentContext({ grant, entryPoint, amount? })` snapshots and validates the
+complete grant, binds the canonical USDC asset and accounts, and retains one exact
+amount within its price band. The default amount is `price_min_amount`.
+`entryPoint` is `receive_with_authorization` or `transfer_with_authorization`.
+The returned context and its nested data are immutable; copies are not admitted
+contexts. Contexts are local to the loaded SDK instance and are not serializable
+approval tokens.
+
+Use `checkPaymentSignRequest({ context, typedData })` inside the wallet callback,
+and sign only its returned `typedData`. It accepts the exact SDK payload with or
+without the standard `EIP712Domain` type declaration. After the wallet responds,
+`verifyPaymentSignature({ context, signature })` recovers the payer locally and
+returns the original 65-byte signature text. It refuses wrong signers, changed
+payloads, malformed signatures, and recovery IDs other than 27 or 28.
+
+Use `checkPaymentSubmitRequest({ context, signature, request })` inside the
+broadcast callback, then forward only its returned frozen `request`. It checks
+the token, chain, zero native value, selected entry point, and every calldata
+field against the retained context and verified signature. It preserves the
+original calldata text while omitting unadmitted transaction fields.
+
+All four helpers return `{ ok: true, ... }` or `{ ok: false, reason }`. Every
+admission uses the current clock and refuses at the grant's authorization expiry
+rounded down to whole seconds, including after asynchronous context creation.
+Check the signature after a delayed wallet response, and check the request at
+the broadcast boundary. The existing high-level payment builders still select
+only the minimum amount; use the low-level signing builders for another approved
+in-band amount.
+
+These helpers do not obtain consent, authenticate a provider, select provider
+policy, sign, broadcast, or prove settlement. The application retains those
+responsibilities. For `receive_with_authorization`, the token still requires the
+payee to submit the transaction.
+
+The root bundle includes a reviewed Ethers 6.17.0 signature-recovery closure via
+a pinned build dependency and its official browser mappings. Ethers is not a
+consumer runtime dependency. The two runtime dependencies remain `tweetnacl` and
+`tweetnacl-util`; upstream bundled-code licenses are carried in `NOTICE`.
+
+### Verify historical settlement with an RPC quorum
+
+`verifySettlement({ tx, grant, rpcUrls, allowedRpcHosts, fetch? })` checks a
+historical Base USDC receipt against the complete grant's hash, payer, payee and
+price band. Optional `grantHash`, `payer`, `payee` and `amount` must agree with the
+grant; an explicit amount must also match the paired Transfer exactly. Without a
+grant, supply those four typed terms. This checks receipt binding, not grant
+signature authenticity, provider acceptance, or permission for a fresh payment.
+An expired grant can still identify a historical payment. Returned expiry
+metadata must still have a valid ISO timestamp shape.
+
+Supply HTTPS RPC URLs and the application's pinned host list explicitly. Every
+selected hostname group must answer all four read methods. Hostnames differing
+only by ports or known loopback aliases cannot form a quorum. Host grouping does
+not establish organizational independence; the application must choose operators
+it independently trusts. Hosts outside the supplied policy refuse unless
+`allowUnpinnedRpc: true` is explicit. A successful verdict based on such hosts
+retains `unpinned: true` and lists them in `unpinnedHosts`.
+
+Receipts must agree under a canonicalization that preserves every nested field
+and null. The verifier checks transaction, chain, successful status, receipt and
+log block identity, the payer's grant-derived authorization nonce, and the first
+subsequent canonical-USDC Transfer by log index. Ambiguous authorization or
+payer-to-payee transfers refuse. Every operator must corroborate the block hash
+and height. Confirmation depth is `lowest latest head - receipt height`, at least
+12, with at most 30 blocks of head divergence. `minConfirmations` may increase
+the floor using a safe integer.
+
+The result is `{ ok: false, reason, detail }` or a successful fact record whose
+`assurance.level` is `rpc-quorum-inclusion`, `safe` and `finalized` are both
+`not-checked`, and `confirmationBasis` is `lowest-latest-head`. It does not claim
+L1-derived or safe/finalized chain verification. Returned evidence contains host
+names rather than full RPC URLs or transport exception text.
+
+An injected `fetch` replaces only HTTP I/O. Requests explicitly omit browser
+credentials and referrer information. The internal transport still enforces
+a 4 MiB streamed response cap, depth limit, 20-second attempt deadline, and at
+most three attempts for narrowly classified network/429/5xx failures. Redirects,
+malformed responses and timeouts refuse. Responses must identify JSON-RPC 2.0
+and echo the exact numeric request ID; result and error cannot coexist. These
+identity checks are an additional requirement of this SDK verifier. No unchecked
+RPC-result callback is exposed, and the existing relay transport is unchanged.

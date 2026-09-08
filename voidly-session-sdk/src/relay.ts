@@ -696,6 +696,11 @@ export interface ResolveSettlementTransactionInput {
   readonly authorizer: string;
   readonly bindingReference: string;
   readonly fromBlock: bigint;
+  readonly logQuery?: {
+    readonly maxBlocksPerRequest: number;
+    readonly maxRequests: number;
+    readonly maxElapsedMs?: number;
+  };
 }
 
 const HEX32_NO_PREFIX_RE = /^[0-9a-f]{64}$/;
@@ -748,6 +753,10 @@ export async function resolveSettlementTransaction(
         "fromBlock is required and must be a non-negative bigint. There is no default: a " +
         "guessed window either misses a payment that exists or asks for an unbounded scan.",
     };
+  }
+
+  if (input.logQuery !== undefined) {
+    return resolvePagedSettlementTransaction(input, token, authorizer, ref);
   }
 
   const res = await input.rpc.request("eth_getLogs", [
@@ -807,4 +816,82 @@ export async function resolveSettlementTransaction(
     };
   }
   return { kind: "found", transactionHash: hash, blockNumber };
+}
+
+async function resolvePagedSettlementTransaction(
+  input: ResolveSettlementTransactionInput,
+  token: string,
+  authorizer: string,
+  ref: string,
+): Promise<SettlementLookupResult> {
+  const limits = input.logQuery;
+  const unavailable = (detail: string): SettlementLookupResult => ({ kind: "unavailable", detail });
+  if (!limits || typeof limits !== "object" || Array.isArray(limits)) {
+    return unavailable("Invalid bounded log query configuration.");
+  }
+  const { maxBlocksPerRequest, maxRequests, maxElapsedMs = 15_000 } = limits;
+  const anchor = input.fromBlock, rpc = input.rpc;
+  if (!Number.isSafeInteger(maxBlocksPerRequest) || maxBlocksPerRequest < 1 ||
+      maxBlocksPerRequest > 2000 || !Number.isSafeInteger(maxRequests) ||
+      maxRequests < 1 || maxRequests > 256 || !Number.isSafeInteger(maxElapsedMs) ||
+      maxElapsedMs < 1 || maxElapsedMs > 60_000) {
+    return unavailable("Invalid log bounds: page size 1..2000, requests 1..256, elapsed 1..60000ms.");
+  }
+  const started = performance.now();
+  const request = async (method: string, params: readonly unknown[]): Promise<RpcResult> => {
+    const expired = (): RpcResult => ({ ok: false, reason: "rpc_unreachable", detail: "Complete log query elapsed budget exceeded." });
+    if (performance.now() - started >= maxElapsedMs) return expired();
+    const reply = await rpc.request(method, params);
+    return performance.now() - started >= maxElapsedMs ? expired() : reply;
+  };
+  const headReply = await request("eth_getBlockByNumber", ["latest", false]);
+  if (!headReply.ok) return unavailable(`log query head unavailable: ${headReply.detail}`);
+  const head = headReply.result as Record<string, unknown> | null;
+  const end = head && typeof head === "object" ? hexToBigInt(head.number) : null;
+  const headHash = head && typeof head.hash === "string" ? head.hash.toLowerCase() : "";
+  if (end === null || !TX_HASH_RE.test(headHash) || end < anchor) {
+    return unavailable("log query head missing, malformed, or behind the retained anchor.");
+  }
+  const size = BigInt(maxBlocksPerRequest);
+  const pages = (end - anchor + size) / size;
+  if (pages > BigInt(maxRequests)) {
+    return unavailable(`Complete log query needs ${pages} pages; budget is ${maxRequests}. Anchor retained.`);
+  }
+  const topics = [AUTHORIZATION_USED_TOPIC0, `0x${"0".repeat(24)}${authorizer.slice(2)}`, `0x${ref}`];
+  let found: { kind: "found"; transactionHash: string; blockNumber: bigint } | null = null;
+  let contradictory = false;
+  for (let start = anchor; start <= end; start += size) {
+    const last = start + size - 1n < end ? start + size - 1n : end;
+    const reply = await request("eth_getLogs", [{
+      address: token, topics, fromBlock: `0x${start.toString(16)}`, toBlock: `0x${last.toString(16)}`,
+    }]);
+    if (!reply.ok) return unavailable(`Incomplete log query at ${start}..${last}: ${reply.reason}: ${reply.detail}`);
+    if (!Array.isArray(reply.result)) return unavailable("log query did not return an array.");
+    for (const item of reply.result) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return unavailable("Malformed log in numeric query.");
+      const log = item as Record<string, unknown>;
+      const number = hexToBigInt(log.blockNumber);
+      const hash = typeof log.transactionHash === "string" ? log.transactionHash.toLowerCase() : "";
+      if (number === null || number < start || number > last || !TX_HASH_RE.test(hash) ||
+          typeof log.address !== "string" || log.address.toLowerCase() !== token ||
+          !Array.isArray(log.topics) || log.topics.length !== topics.length ||
+          !log.topics.every((topic, i) => typeof topic === "string" && topic.toLowerCase() === topics[i]) ||
+          log.removed !== false) {
+        return unavailable("Log does not match its exact numeric page, emitter, topics, or canonical inclusion.");
+      }
+      if (found !== null) contradictory = true;
+      found = { kind: "found", transactionHash: hash, blockNumber: number };
+    }
+  }
+  const check = await request("eth_getBlockByNumber", [`0x${end.toString(16)}`, false]);
+  if (!check.ok) return unavailable(`log query head recheck unavailable: ${check.detail}`);
+  const after = check.result as Record<string, unknown> | null;
+  if (!after || typeof after !== "object" || hexToBigInt(after.number) !== end ||
+      typeof after.hash !== "string" || after.hash.toLowerCase() !== headHash) {
+    return unavailable("Captured log query end changed during the complete scan.");
+  }
+  if (contradictory) {
+    return { kind: "impossible", detail: "More than one AuthorizationUsed log for this binding; at most one can exist." };
+  }
+  return found ?? { kind: "not_consumed" };
 }
