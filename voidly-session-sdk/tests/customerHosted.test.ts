@@ -38,7 +38,7 @@ async function fixture(total='100000',maxActive=2){
     expiresAtMs:r.original.expiresAtMs,maxPerJobAtoms:'50000',maxTotalAtoms:total,maxActiveJobs:maxActive};
   const dir=realpathSync(mkdtempSync(join(tmpdir(),'hosted-jobs-test-')));dirs.push(dir);
   const records=new Map<string,Awaited<ReturnType<typeof hostedMaterial>>>(),approvals=new Map<string,BuyerConsentSnapshot>(),calls:string[]=[],budgets=new Set<string>();
-  const state={unknown:'',changedService:false,changedInput:false,completed:false,before:(op:string)=>{},current:true};
+  const state={unknown:'',changedService:false,changedInput:false,completed:false,released:false,wrongRelease:false,before:(op:string)=>{},current:true};
   const session={accessToken:'synthetic-own-account',isCurrent:()=>state.current,signal:new AbortController().signal};
   const fetcher:typeof fetch=async(url,init)=>{
     expect(new URL(String(url)).origin).toBe('https://voidly.ai');expect(init?.redirect).toBe('error');expect(init?.credentials).toBe('omit');
@@ -61,7 +61,11 @@ async function fixture(total='100000',maxActive=2){
     else if(op==='claimForWallet')data=m!.signing;
     else if(op==='submit')data={kind:'provider-accepted',jobId:m!.view.jobId,exposureId:'exposure-'+m!.view.jobId,
       grantHash:m!.signing.claim.kind==='original-wallet-request'?m!.signing.claim.grantHash:'',payment:'unconfirmed'};
-    else if(op==='recover')data=state.completed?await completedHostedHistory(m!):{kind:'original-monetary-recovery',jobId:m!.view.jobId,settlement:{kind:'not-checked'},delivery:null,result:{kind:'unknown',reason:'ORIGINAL_UNAVAILABLE'}};
+    else if(op==='recover')data=state.released?{kind:'original-monetary-recovery',jobId:m!.view.jobId,settlement:{kind:'not-checked'},delivery:null,
+      result:{kind:'not-started',reason:'AUTHORIZATION_EXPIRED_UNUSED'},budgetRecovery:{kind:'original-expired-unused-released',jobId:state.wrongRelease?'different-job':m!.view.jobId,
+        claimId:'claim-a',releaseId:'release-a',preparedDigest:'c'.repeat(64),amountAtoms:'50000',recordedAtMs:Date.now(),evidenceDigest:'e'.repeat(64),
+        finalizedBlock:{number:'0x1',hash:'0x'+'a'.repeat(64),timestamp:Math.ceil(Date.now()/1000)}}}:
+      state.completed?await completedHostedHistory(m!):{kind:'original-monetary-recovery',jobId:m!.view.jobId,settlement:{kind:'not-checked'},delivery:null,result:{kind:'unknown',reason:'ORIGINAL_UNAVAILABLE'}};
     else throw Error('Unrecognized route');
     if(state.unknown===op)throw Error('Synthetic response lost AFTER recorded operation');
     return new Response(JSON.stringify({version,data}),{headers:{'content-type':'application/json'}});
@@ -120,6 +124,36 @@ test('one active slot opens for a second job only after accounted/opened origina
   f.state.completed=true;expect(await h.recover(f.input.operationId)).toMatchObject({kind:'original-recovery',result:{settlement:{kind:'accounted'},result:{kind:'opened'}}});
   expect(h.status().committedAtoms).toBe('50000');
   expect(await h.run({...f.input,operationId:'second'})).toMatchObject({kind:'submitted'});expect(h.status().committedAtoms).toBe('100000');
+});
+test('prepared interruption recovers the same job and only a native release opens its slot without refunding the cap',async()=>{
+  const f=await fixture('100000',1),h=f.open();f.state.unknown='readScope';
+  expect(await h.run(f.input)).toMatchObject({kind:'recover-original',stage:'prepared'});
+  expect(h.status()).toMatchObject({committedAtoms:'50000',attempts:0});expect(f.calls).not.toContain('sign');
+  f.state.unknown='';const before=f.calls.length;
+  expect(await h.recover(f.input.operationId)).toMatchObject({kind:'original-recovery',stage:'prepared',result:{budgetRecovery:null}});
+  expect(f.calls.slice(before)).toEqual(['read','recover']);
+  expect(await h.run({...f.input,operationId:'second'})).toMatchObject({kind:'refused',reason:'ACTIVE_JOB_LIMIT'});
+  f.state.released=true;f.state.wrongRelease=true;
+  await expect(h.recover(f.input.operationId)).rejects.toThrow();
+  expect(await h.run({...f.input,operationId:'second'})).toMatchObject({kind:'refused',reason:'ACTIVE_JOB_LIMIT'});
+  f.state.wrongRelease=false;
+  expect(await h.recover(f.input.operationId)).toMatchObject({kind:'original-recovery',stage:'release_observed',result:{budgetRecovery:{kind:'released'}}});
+  expect(await f.open().run(f.input)).toMatchObject({kind:'original-recovery',stage:'release_observed'});
+  expect(f.calls.filter(x=>x==='begin')).toHaveLength(1);expect(f.calls).not.toContain('sign');
+  expect(h.status()).toMatchObject({committedAtoms:'50000',attempts:0});
+  f.state.released=false;expect(await h.run({...f.input,operationId:'second'})).toMatchObject({kind:'submitted'});
+  expect(h.status().committedAtoms).toBe('100000');
+  expect(await h.run({...f.input,operationId:'third'})).toMatchObject({kind:'refused',reason:'BUDGET_EXHAUSTED'});
+});
+test('an interrupted wallet disclosure also retains its debit when native unused recovery releases the active slot',async()=>{
+  const f=await fixture('100000',1),h=f.open();f.state.unknown='claimForWallet';
+  expect(await h.run(f.input)).toMatchObject({kind:'recover-original',stage:'payment_intent'});
+  expect(h.status()).toMatchObject({committedAtoms:'50000',attempts:1});expect(f.calls).not.toContain('sign');
+  f.state.unknown='';f.state.released=true;
+  expect(await f.open().recover(f.input.operationId)).toMatchObject({kind:'original-recovery',result:{budgetRecovery:{kind:'released'}}});
+  expect(h.status().committedAtoms).toBe('50000');
+  f.state.released=false;expect(await h.run({...f.input,operationId:'second'})).toMatchObject({kind:'submitted'});
+  expect(h.status()).toMatchObject({committedAtoms:'100000',attempts:2});
 });
 test('policy expiry after review refuses approval instead of creating a replacement scope',async()=>{
   const f=await fixture(),h=f.open();f.state.before=op=>{if(op==='reviewScope')vi.spyOn(Date,'now').mockReturnValue(f.policy.expiresAtMs+1);};

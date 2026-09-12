@@ -86,7 +86,7 @@ export function openAutomaticBudget(directory: string, policy: StoredPolicy) {
       active(now);const old=operation(value.operationId);
       if(old){requirePayment(old.binding===value.binding&&old.amountAtoms===value.amountAtoms,'OPERATION_CONFLICT');return false;}
       requirePayment(BigInt(total())+BigInt(value.amountAtoms)<=BigInt(policy.maxTotalAtoms),'BUDGET_EXHAUSTED');
-      const n=db.prepare("SELECT COUNT(*) n FROM automatic_hosted_operation WHERE policy_id=? AND stage<>'result_observed'").get(policy.id)!;
+      const n=db.prepare("SELECT COUNT(*) n FROM automatic_hosted_operation WHERE policy_id=? AND stage NOT IN ('result_observed','release_observed')").get(policy.id)!;
       requirePayment(Number(n.n)<maxActive,'ACTIVE_JOB_LIMIT');
       db.prepare("INSERT INTO automatic_hosted_operation(policy_id,operation_id,binding,body,amount,stage) VALUES(?,?,?,?,?,'review_intent')")
         .run(policy.id,value.operationId,value.binding,value.body,value.amountAtoms);return true;

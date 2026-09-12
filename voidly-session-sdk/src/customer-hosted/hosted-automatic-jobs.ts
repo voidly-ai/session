@@ -16,7 +16,7 @@ export type AutomaticHostedJobPolicy = Readonly<{
 }>;
 export type CustomerHostedJobRecovery =
  | Readonly<{kind:'original-recovery';operationId:string;result:CheckoutRecovery|CheckoutCancelReceipt}>
- | Readonly<{kind:'original-recovery';operationId:string;stage:string;review:BuyerConsentSnapshot|null;checkout:CheckoutView|null}>;
+ | Readonly<{kind:'original-recovery';operationId:string;stage:string;review:BuyerConsentSnapshot|null;checkout:CheckoutView|null;result?:CheckoutRecovery|CheckoutCancelReceipt}>;
 export type CustomerHostedJobOutcome = CustomerHostedJobRecovery
  | Readonly<{kind:'recover-original';operationId:string;stage:string}>
  | Readonly<{kind:'submitted';operationId:string;jobId:string;payment:'unconfirmed';submission:CheckoutSubmission}>
@@ -124,12 +124,25 @@ export function createCustomerHostedJobs(options:Readonly<{
       const result=await payment(op!).recover(body.reviewRequestId);current();
       if(result.kind==='original-monetary-recovery'&&result.settlement.kind==='accounted'&&result.result.kind==='opened'&&op!.stage==='payment_intent')
         store.transitionOperation(operationId,'payment_intent','result_observed',op!.body,Date.now(),false);
+      if((result.kind==='original-unclaimed-cancelled'||result.budgetRecovery?.kind==='released')&&op!.stage==='payment_intent')
+        store.transitionOperation(operationId,'payment_intent','release_observed',op!.body,Date.now(),false);
       return Object.freeze({kind:'original-recovery' as const,operationId,result});
     }
-    const observed=await api.consent.readScope({requestId:body.reviewRequestId});current();
+    // Retained approval is a selector for owned history, not fresh spending
+    // authority. Recovery must also work after business permission expires.
+    const observed=body.snapshot?.approval?body.snapshot:await api.consent.readScope({requestId:body.reviewRequestId});current();
     if(observed)checkReview(observed,body);
     if(observed?.approval){requirePayment(observed.approval.requestId===body.approveRequestId,'APPROVAL_CHANGED');
       const checkout=await api.checkout.read(ref(observed));current();
+      if(checkout?.jobId){
+        requirePayment(checkout.amountAtoms===p.maxPerJobAtoms&&(!body.checkout||
+          checkout.checkoutId===body.checkout.checkoutId&&checkout.jobId===body.checkout.jobId&&checkout.expiresAtMs===body.checkout.expiresAtMs),'ORIGINAL_CHANGED');
+        const result=await api.checkout.recover(ref(observed));current();
+        const released=result.kind==='original-unclaimed-cancelled'||result.budgetRecovery?.kind==='released';
+        if(released&&op!.stage!=='release_observed')
+          store.transitionOperation(operationId,op!.stage,'release_observed',op!.body,Date.now(),false);
+        return Object.freeze({kind:'original-recovery' as const,operationId,stage:store.operation(operationId)!.stage,review:observed,checkout,result});
+      }
       return Object.freeze({kind:'original-recovery' as const,operationId,stage:op!.stage,review:observed,checkout});}
     return Object.freeze({kind:'original-recovery' as const,operationId,stage:op!.stage,review:observed,checkout:null});
   }
