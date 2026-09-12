@@ -852,3 +852,53 @@ malformed responses and timeouts refuse. Responses must identify JSON-RPC 2.0
 and echo the exact numeric request ID; result and error cannot coexist. These
 identity checks are an additional requirement of this SDK verifier. No unchecked
 RPC-result callback is exposed, and the existing relay transport is unchanged.
+
+
+## Customer-hosted automatic jobs (release candidate)
+
+The `@voidly/session/customer-hosted` entry is prepared for the next SDK release; it is not part of the published 1.3.0 package. Publishing this source and qualifying its hosted service are separate steps.
+
+This optional entry requires Node 24.15 or newer on Linux or macOS (POSIX file permissions), and a persistent directory owned by the running user with mode 0700. It keeps a local SQLite spending journal. The legacy SDK and CLI remain unchanged. Importing this entry opens no database, signs nothing and sends no request.
+
+Your trusted application supplies a genuine Voidly account session and its own EIP-1193 signer. The account owner must sign in through the supported Voidly account flow; `isCurrent` must reflect actual account/session validity and `signal` must abort when that session is retired. This entry does not issue scoped builder credentials, import a browser session, automatically refresh a token or extend any approval. Third-party scoped credential provisioning remains a separate integration requirement.
+
+Use `createHostedBuyerAdapter(session)` to read the fixed service readiness, then retain one setup request ID before calling `begin({requestId,payerAccount,definitionDigest})`. Use the exact definition digest from readiness. After a lost setup response, read the original; do not generate another setup ID. The setup does not prove wallet control or authorize spending. Readiness must return `checkout-ready` for the exact selected service and payer before proceeding.
+
+Next, use `createAuthenticatedBuyerConsentAdapter(session).reviewScope({requestId,selectedText})` to obtain the current native review. Show the owner the exact provider, data, receiving address, per-job amount, total budget and expiry. Preserve the actual review and the owner's explicit approval in your application. The owner separately authorizes this host and signer to carry out matching jobs. Never accept policy, session, signer or storage arguments from an agent.
+
+```ts
+import { createCustomerHostedJobs } from '@voidly/session/customer-hosted';
+
+// Trusted application setup. These values come from the actual owner review.
+const jobs = createCustomerHostedJobs({
+  directory: applicationPrivatePersistentDirectory,
+  session: verifiedVoidlyAccountSession,
+  provider: customerConfiguredNoninteractiveSigner,
+  policy: {
+    version: 'voidpay.customer-hosted-jobs.v1',
+    id: retainedOwnerApprovalId,
+    ownerReviewed: actualNativeReview,
+    inputs: ownerApprovedExactInputRecords,
+    notBeforeMs: ownerApprovedStart,
+    expiresAtMs: ownerApprovedEnd,
+    maxPerJobAtoms: ownerApprovedPerJobLimit,
+    maxTotalAtoms: ownerApprovedLifetimeLimit,
+    maxActiveJobs: ownerApprovedConcurrency,
+  },
+});
+
+// Expose only these job functions to the agent. Keep each operation ID stable.
+await jobs.run({ operationId: applicationJobId, selectedText });
+await jobs.recover(applicationJobId);
+
+// Owner controls stay outside the agent's tool surface.
+jobs.status();
+jobs.revoke();
+jobs.close(); // only after outstanding calls settle
+```
+
+Each input record is `{kind:'exact-bytes-v1',digest,byteLength}` for the SHA-256 of the full UTF-8 input. One policy covers 1–32 exact inputs, a fixed provider/service generation and bounded money/time; it does not authorize arbitrary future files. Each fresh review must match the approved native template. The runner reserves the full amount and original IDs before an effect, preserves uncertainty, and never retries a claim, signature or submission after a lost response. Reuse the same persistent database across all processes sharing a policy; do not delete, clone or roll it back to reset spending.
+
+`submitted` is unconfirmed. Original recovery reports settlement and delivery separately; only an accounted payment with an opened result releases the local active slot. The lifetime reservation stays counted. Native budget enforcement remains independent. No provider performance or wallet funding guarantee is added.
+
+Routine matching work can run without another Voidpay dialog only when the customer has independently configured a noninteractive signer. Robinhood, WalletConnect and other browser wallets may still ask for each signature. Voidpay receives no wallet key and supplies no hosted signing wallet, custody or escrow. Account-key services, provider execution, ranking, operational deployment and native ledger code are absent from this customer entry.

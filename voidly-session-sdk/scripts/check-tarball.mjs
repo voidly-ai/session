@@ -159,6 +159,35 @@ for (const { abs, rel } of files) {
   }
 }
 
+// The optional customer host entry has its own Node-only export and no loader.
+// Its filesystem access is only the caller-owned durable spending journal.
+{
+  const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+  const expected = { node: { types: "./dist/customerHosted.d.ts", import: "./dist/customerHosted.mjs", default: "./dist/customerHosted.mjs" } };
+  if (JSON.stringify(manifest.exports?.["./customer-hosted"]) !== JSON.stringify(expected))
+    findings.push("CUSTOMER HOST EXPORT — expected the exact Node-only subpath");
+  const customerFiles = files.filter(f => /customerHosted/i.test(f.rel)).map(f => f.rel).sort();
+  if (JSON.stringify(customerFiles) !== JSON.stringify(["dist/customerHosted.d.ts", "dist/customerHosted.mjs"]))
+    findings.push("CUSTOMER HOST FILES — expected only the readable bundle and declarations");
+  const runtime = files.find(f => f.rel === "dist/customerHosted.mjs");
+  if (runtime) {
+    const body = readFileSync(runtime.abs, "utf8");
+    const imports = [...body.matchAll(/^import[^\n]*\bfrom\s*["']([^"']+)["']/gm)].map(m => m[1]);
+    const allowed = new Set(["node:crypto", "node:fs", "node:path", "node:sqlite", "tweetnacl", "tweetnacl-util"]);
+    if (!imports.length || imports.length !== (body.match(/^import\b/gm) || []).length || imports.some(spec => !allowed.has(spec)) ||
+        /\bimport\s*\(|\brequire\s*\(|process\.env|private-services|provider-catalog|\/Users\//.test(body))
+      findings.push("CUSTOMER HOST BOUNDARY — unreviewed dependency or environment loader");
+    const match = body.match(/export\s*\{([^}]+)\};?\s*$/);
+    const names = match ? match[1].split(',').map(n => n.trim().split(/\s+as\s+/).at(-1)).filter(Boolean).sort() : [];
+    if (JSON.stringify(names) !== JSON.stringify(["AutomaticPaymentRefusal", "HostedBuyerError", "createAuthenticatedBuyerConsentAdapter", "createCustomerHostedJobs", "createHostedBuyerAdapter"]))
+      findings.push("CUSTOMER HOST SURFACE — unexpected runtime export");
+    if (body.length > 400000 || !body.includes('from "node:sqlite"') || !body.includes('NODE_24_15_REQUIRED'))
+      findings.push("CUSTOMER HOST CONTENT — unexpected size or missing local/runtime guard");
+  }
+  if (readFileSync(join(root, "dist/index.mjs"), "utf8").includes("createCustomerHostedJobs"))
+    findings.push("CUSTOMER HOST ISOLATION — Node-only entry leaked into the legacy root");
+}
+
 const CANARY = ["privateHire", "bindAuthorizationToGrant", "settlementBindingReference"];
 const distFiles = files.filter((f) => /^dist\/.*\.m?js$/.test(f.rel));
 const distText = distFiles.map((f) => readFileSync(f.abs, "utf8")).join("\n");

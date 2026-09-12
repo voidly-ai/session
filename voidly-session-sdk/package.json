@@ -58,6 +58,13 @@
         "import": "./dist/nodeFiles.mjs",
         "default": "./dist/nodeFiles.mjs"
       }
+    },
+    "./customer-hosted": {
+      "node": {
+        "types": "./dist/customerHosted.d.ts",
+        "import": "./dist/customerHosted.mjs",
+        "default": "./dist/customerHosted.mjs"
+      }
     }
   },
   "bin": {
@@ -85,7 +92,7 @@
     "tweetnacl-util": "0.15.1"
   },
   "devDependencies": {
-    "@types/node": "^20.10.0",
+    "@types/node": "24.3.0",
     "esbuild": "^0.28.1",
     "ethers": "6.17.0",
     "typescript": "^5.3.3",
