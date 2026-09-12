@@ -1,4 +1,3 @@
-/** Public account-setup interface. Readiness is not consent or wallet authority. */
 import type {BuyerConsentSession, BuyerConsentServiceRef} from './invitedBuyerConsent'
 
 export const HOSTED_BUYER_VERSION = 'voidpay.hosted-buyer-onboarding.v1' as const
@@ -60,7 +59,6 @@ export function parseHostedBuyerSetup(value:unknown):HostedBuyerSetup {
   return Object.freeze({version:HOSTED_BUYER_VERSION,permissionId:id(r.permissionId),configurationDigest:digest(r.configurationDigest),requestDigest:digest(r.requestDigest),payerAccount:hostedPayer(r.payerAccount),...limits(r),walletControlVerified:false,paymentAuthorityGranted:false,checkoutReady:false})
 }
 export function parseHostedBuyerReadiness(value:unknown):HostedBuyerReadiness {
-  // Capture the discriminator without invoking an accessor.
   const kind=value&&typeof value==='object'?Object.getOwnPropertyDescriptor(value,'kind'):undefined
   if(!kind||!('value'in kind)||!['setup-required','checkout-ready'].includes(kind.value))return fail()
   const ready=kind.value==='checkout-ready'
@@ -73,7 +71,6 @@ export function parseHostedBuyerBegin(value:unknown):HostedBuyerBegin {
   const r=record(value,['requestId','payerAccount','definitionDigest'])
   return Object.freeze({requestId:id(r.requestId),payerAccount:hostedPayer(r.payerAccount),definitionDigest:digest(r.definitionDigest)})
 }
-/** Current verified Voidly account; no destination, owner identifier or private key input. */
 export function createHostedBuyerAdapter(value:BuyerConsentSession, transport:typeof fetch=globalThis.fetch.bind(globalThis)):HostedBuyerAdapter {
   if(typeof transport!=='function')return fail('INVALID_CONFIGURATION')
   const r=record(value,['accessToken','isCurrent','signal'])

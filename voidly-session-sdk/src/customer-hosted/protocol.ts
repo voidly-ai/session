@@ -1,4 +1,3 @@
-/** The fixed, no-value market reference contract. No settlement authority. */
 export const MARKET_VERSION = "voidpay.market.v0" as const;
 export const MARKET_ROUTE_PREFIX = "/v0/market/" as const;
 export const MAX_TEXT_BYTES = 65_536;
@@ -381,7 +380,6 @@ async function hashBytes(bytes: Uint8Array): Promise<Digest> {
 async function hashTuple(domain: string, fields: readonly TupleValue[]): Promise<Digest> {
   return hashBytes(new TextEncoder().encode(JSON.stringify([domain, MARKET_VERSION, ...fields])));
 }
-/** Hashes exact valid UTF-8 text. Private contents need not be sent to the relay. */
 export async function hashText(value: string): Promise<Digest> {
   utf8ByteLength(value);
   return hashBytes(new TextEncoder().encode(value));
@@ -395,7 +393,6 @@ export async function hashPaymentTerms(value: "fixture-no-payment"): Promise<Dig
   return hashTuple("voidpay.market.payment-terms", [value]);
 }
 export async function hashQuote(value: QuoteBody): Promise<Digest> {
-  // Rebuild an explicit field tuple. This is an integrity digest, not a signature.
   const q = parseQuoteBody(value);
   return hashTuple("voidpay.market.quote", [q.quoteId, contextTuple(q.context), q.grantId, serviceTuple(q.service), q.inputHandle, q.inputDigest, q.inputByteLength, q.chain, q.asset, q.recipient, q.amount, q.paymentTermsDigest, q.issuedAt, q.expiresAt, q.deliveryDeadline, q.authenticity, q.mode, q.paid]);
 }

@@ -9,7 +9,6 @@ import { createHostedBuyerAdapter } from './hosted-onboarding-interface';
 
 export type AutomaticHostedJobPolicy = Readonly<{
   version:'voidpay.customer-hosted-jobs.v1'; id:string;
-  /** Displayed to and explicitly approved by the owner before installation. */
   ownerReviewed:BuyerConsentReview;
   inputs:readonly Readonly<{kind:'exact-bytes-v1';digest:string;byteLength:number}>[];
   notBeforeMs:number;expiresAtMs:number;maxPerJobAtoms:string;maxTotalAtoms:string;maxActiveJobs:number;
@@ -56,8 +55,6 @@ function scope(r:BuyerConsentReview){
 }
 const ref=(s:BuyerConsentSnapshot)=>({reviewId:s.review.reviewId,reviewDigest:s.reviewDigest});
 
-/** The customer's trusted host is the delegation boundary. The agent receives
- * run/recover only; policy/session/signer installation are explicit owner work. */
 export function createCustomerHostedJobs(options:Readonly<{
   directory:string;policy:AutomaticHostedJobPolicy;session:CheckoutSession;
   provider:Eip1193Provider;fetch?:typeof fetch;signingTimeoutMs?:number;
@@ -128,8 +125,6 @@ export function createCustomerHostedJobs(options:Readonly<{
         store.transitionOperation(operationId,'payment_intent','release_observed',op!.body,Date.now(),false);
       return Object.freeze({kind:'original-recovery' as const,operationId,result});
     }
-    // Retained approval is a selector for owned history, not fresh spending
-    // authority. Recovery must also work after business permission expires.
     const observed=body.snapshot?.approval?body.snapshot:await api.consent.readScope({requestId:body.reviewRequestId});current();
     if(observed)checkReview(observed,body);
     if(observed?.approval){requirePayment(observed.approval.requestId===body.approveRequestId,'APPROVAL_CHANGED');

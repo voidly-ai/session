@@ -1,4 +1,3 @@
-// Ported synthetic customer-owned SDK tests. All HTTP and wallet requests stay in-process.
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

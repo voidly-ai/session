@@ -11,8 +11,6 @@ export type Attempt = { jobId: string; original: string; originalDigest: string;
   claim: string | null; effectNotAfterMs: number };
 export type HostedOperation = { operationId:string; binding:string; body:string; amountAtoms:number; stage:string; paymentJobId:string|null };
 
-/** Host-owned local storage. The same database must be shared by every process
- * using this policy. No keys, signatures or bearer credentials are stored. */
 export function openAutomaticBudget(directory: string, policy: StoredPolicy) {
   requirePayment(isAbsolute(directory) && realpathSync(directory) === directory, 'PRIVATE_DIRECTORY_REQUIRED');
   const ds = lstatSync(directory);

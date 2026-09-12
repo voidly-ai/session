@@ -10,12 +10,9 @@ const scalarFields = (r: Record<string, unknown>, ids: string[], digests: string
 function job(r: Record<string, unknown>, o: MonetaryOriginal, c?: MonetaryClaimReference | null) {
   if (r.jobId !== o.prepared.jobId || (r.preparedDigest !== undefined && r.preparedDigest !== o.prepared.receipt.preparedDigest) || (c && r.claimId !== undefined && r.claimId !== c.claimId) || (c && r.grantHash !== undefined && r.grantHash !== c.grantHash)) return invalid();
 }
-/** Fresh response disclosure: the original signing request must still be visible. */
 export function wallet(value: unknown, o: MonetaryOriginal): Promise<MonetaryWalletClaim | MonetaryExistingClaim> {
   return decodeWallet(value,o,true);
 }
-/** Retained history only. All original/amount/typed-data/hash bindings remain;
- * this does not authorize a new wallet disclosure or extend the work deadline. */
 export function retainedWallet(value: unknown, o: MonetaryOriginal): Promise<MonetaryWalletClaim | MonetaryExistingClaim> {
   return decodeWallet(value,o,false);
 }

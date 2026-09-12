@@ -17,7 +17,6 @@ export type OriginalPaymentAuthorization = Readonly<{
   context: AuthContext; originalId: string; grantHash: string; amount: string;
   payer: string; chainId: number; typedData: ReceiveAuthorizationTypedData;
   request: WalletSignRequest; typedDataFingerprint: string; requestFingerprint: string;
-  /** Exact original wire spelling, including recovery byte 27/28. Never logged here. */
   signature: string;
 }>;
 export type WalletSignOutcome =
@@ -30,8 +29,6 @@ type Attempt = { input: string; promise: Promise<WalletSignOutcome> };
 class Refusal extends Error { constructor(readonly reason: string) { super(reason); } }
 const refused = (reason: string): WalletSignOutcome => Object.freeze({ status: 'refused', reason });
 
-/** Match the native claim's canonical JSON after SDK admission. Sort object
- * keys only: EIP-712 member arrays are positional and must keep their order. */
 export function canonicalOriginalPaymentTypedData(value: ReceiveAuthorizationTypedData): ReceiveAuthorizationTypedData {
   function ordered(v: unknown): unknown {
     if (Array.isArray(v)) return Object.freeze(v.map(ordered));
@@ -80,27 +77,19 @@ function chain(value: unknown): string {
 function bounded<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Refusal('wallet_timeout')), timeoutMs);
-    // Both handlers remain attached after a timeout; a late signature/error cannot
-    // escape or cause a second call. The ambiguous original stays locked.
     promise.then(value => { clearTimeout(timeout); resolve(value); }, error => { clearTimeout(timeout); reject(error); });
   });
 }
 
-/** Explicit caller action only. This is neither standing wallet permission nor
- * native original-job authority. A NEW adapter/reload cannot clear a native claim:
- * callers must reconcile that durable original before any subsequent invocation. */
 export function createOriginalPaymentWalletAdapter(options: Readonly<{ provider: Eip1193Provider; timeoutMs?: number }>) {
   const provider = options.provider, timeoutMs = options.timeoutMs ?? 60_000;
   const capturedRequest = provider?.request;
   if (!provider || typeof capturedRequest !== 'function' || !Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 120_000) throw new TypeError('Invalid wallet adapter options');
   const attempts = new Map<string, Attempt>();
-  // Nonce ownership also prevents a different original ID/amount/context from
-  // re-signing an authorization that may already have left this adapter.
   const authorizationOwners = new Map<string, string>();
   const sameProvider = () => { if (provider.request !== capturedRequest) throw new Refusal('wallet_provider_changed'); };
   const read = (method: 'eth_accounts' | 'eth_chainId') => Promise.resolve().then(() => {
     sameProvider();
-    // Consume synchronous provider failures alongside the other parallel read.
     return capturedRequest.call(provider, Object.freeze({ method, params: Object.freeze([]) }));
   });
   async function walletMatches(payer: string, chainId: number) {
@@ -131,8 +120,6 @@ export function createOriginalPaymentWalletAdapter(options: Readonly<{ provider:
       const current = checkPaymentSignRequest({ context, typedData });
       if (!current.ok) throw new Refusal(current.reason);
       sameProvider();
-      // Mark BEFORE calling the wallet: even a synchronous exception cannot prove
-      // the request was never observed. No retry/broadcast is performed here.
       invoked = true;
       const signature = await bounded(Promise.resolve(capturedRequest.call(provider, request)), timeoutMs);
       await walletMatches(payer, chainId);
@@ -146,8 +133,6 @@ export function createOriginalPaymentWalletAdapter(options: Readonly<{ provider:
     } catch (error) {
       const reason = error instanceof Refusal ? error.reason : invoked ? 'wallet_response_unconfirmed' : 'wallet_unavailable';
       if (invoked) return Object.freeze({ status: 'ambiguous', reason, context: selected.context, originalId: selected.originalId, requestFingerprint });
-      // Nothing reached the signing method. An explicit caller retry can redo
-      // preflight; it cannot change an already issued signing request.
       if (nonceKey && authorizationOwners.get(nonceKey) === key) authorizationOwners.delete(nonceKey);
       attempts.delete(key);
       return refused(reason);
@@ -161,8 +146,6 @@ export function createOriginalPaymentWalletAdapter(options: Readonly<{ provider:
       const key = JSON.stringify([selected.context.tenantId, selected.context.appId, selected.context.subjectId, selected.originalId]);
       const bytes = JSON.stringify(selected), prior = attempts.get(key);
       if (prior) return prior.input === bytes ? prior.promise : Promise.resolve(refused('original_conflict'));
-      // Insert synchronously before the async work; concurrent invocations share
-      // the exact same promise and cannot open two wallet approval prompts.
       const attempt = { input: bytes, promise: Promise.resolve().then(() => sign(selected, key)) };
       attempts.set(key, attempt);
       return attempt.promise;

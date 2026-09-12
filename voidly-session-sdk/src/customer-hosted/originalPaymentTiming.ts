@@ -1,4 +1,3 @@
-/** Browser scheduling only. These values never replace native authority or renew an original. */
 export const ORIGINAL_PAYMENT_SUBMIT_BUDGET_MS = 55_000;
 export const ORIGINAL_PAYMENT_MARGIN_MS = 2_000;
 export const ORIGINAL_PAYMENT_MAX_WALLET_WAIT_MS = 120_000;
@@ -28,17 +27,11 @@ function capture(value: unknown, prompt: boolean): Record<string, number> | null
 }
 
 function deadlines(t: Record<string, number>) {
-  // USDC authorization expiry is in whole seconds. Keep the provider's full
-  // accepted work floor after dispatch; never extend the signed grant.
   const submitNotAfterMs = Math.floor(t.workNotAfterMs / 1000) * 1000 - t.requiredRemainingMs;
   const signatureNotAfterMs = submitNotAfterMs - ORIGINAL_PAYMENT_SUBMIT_BUDGET_MS - ORIGINAL_PAYMENT_MARGIN_MS;
   return { submitNotAfterMs, signatureNotAfterMs };
 }
 
-/** Call immediately before the one wallet prompt, using the verified original
- * and its approved requiredRemainingMs. Disclosure expiry bounds starting the
- * prompt; the unchanged work deadline bounds receiving and submitting its result.
- */
 export function planOriginalPaymentTiming(value: PromptTiming): OriginalPaymentTiming {
   const t = capture(value, true);
   if (!t) return Object.freeze({ kind: 'unavailable', reason: 'invalid_timing' });
@@ -49,10 +42,6 @@ export function planOriginalPaymentTiming(value: PromptTiming): OriginalPaymentT
     ...d, walletTimeoutMs: Math.min(ORIGINAL_PAYMENT_MAX_WALLET_WAIT_MS, remaining) });
 }
 
-/** A returned signature belongs to the already-disclosed original. A fresh
- * server builder assertion is still required; an expired old quote is not renewed.
- * This is only a scheduling check, never authorization to sign or send again.
- */
 export function canSubmitOriginalPayment(value: WorkTiming): boolean {
   const t = capture(value, false);
   return t !== null && t.nowMs < deadlines(t).signatureNotAfterMs;

@@ -1,4 +1,3 @@
-/** Public wire validation only. Parsing creates no spending or native ledger authority. */
 import { parseContext, parseServiceRef, type AuthContext, type ServiceRef } from './protocol';
 export const MONETARY_RECEIVER_VERSION = 'voidpay.monetary-receiver.v0' as const;
 export const MONETARY_WORK_VERSION = 'voidpay.market.v1' as const;
@@ -40,7 +39,6 @@ export function record(v: unknown, keys: readonly string[], optional: readonly s
   }
   if (keys.some(k => !Object.hasOwn(out, k))) return invalid(); return out;
 }
-/** Bounded, descriptor-only deep capture: no accessors, prototypes, sparse arrays or aliases survive. */
 export function snapshot(v: unknown, max = MONETARY_MAX_RESPONSE_BYTES): Json {
   let nodes = 0;
   function walk(x: unknown, depth: number): Json {
@@ -71,13 +69,11 @@ export type MonetarySelection = Readonly<{ service: ServiceRef; inputHandle: str
 export type MonetaryTerms = Readonly<{ version: 'voidpay.monetary-terms.v0'; profileDigest: string; receivingDigest: string; payerAccount: string; payeeAccount: string; amountAtoms: string }>;
 export type MonetaryQuote = Readonly<{ version: typeof MONETARY_WORK_VERSION; mode: 'monetary'; paymentRequired: true; quoteId: string; lineage: MonetaryLineage; grantId: string; grantDigest: string; service: ServiceRef; selection: MonetarySelection; terms: MonetaryTerms; termsDigest: string; issuedAtMs: number; expiresAtMs: number; workNotAfterMs: number; workPolicyId: string; workPolicyDigest: string; workPolicyVersion: number; authenticity: 'receiver-assertion' }>;
 export type MonetaryQuoteResponse = Readonly<{ quote: MonetaryQuote; quoteDigest: string }>;
-/** Trusted application expectations from the approved setup, never an agent/tool's authority claim. */
 export type MonetaryApproval = Readonly<Omit<MonetaryQuote, 'version' | 'mode' | 'paymentRequired' | 'quoteId' | 'termsDigest' | 'issuedAtMs' | 'authenticity' | 'workNotAfterMs'> & {
   notBeforeMs: number; maxDurationMs: number; minimumOriginalMs: number; supplierManifestDigest: string; providerDid: string; hirerDid: string;
   providerSigningPublicKeyBase64: string; providerEncryptionPublicKeyBase64: string;
 }>;
 export type MonetaryPrepared = Readonly<{ kind: 'original-prepared-monetary-job'; jobId: string; receipt: Readonly<{ purchaseId: string; preparedDigest: string; supplierManifestDigest: string }> }>;
-/** Retain this exact journal before requesting a wallet disclosure. It contains no keys/signature. */
 export type MonetaryOriginal = Readonly<{ approval: MonetaryApproval; quoted: MonetaryQuoteResponse; prepared: MonetaryPrepared }>;
 export type MonetaryClaimReference = Readonly<{ claimId: string; grantHash: string; offerHash: string }>;
 export type MonetaryTaskGrant = Readonly<{ schema: 'voidly-task-grant/v1'; hirer_did: string; provider_did: string;
@@ -111,7 +107,6 @@ export type MonetaryResultObservation = Readonly<{ version: 'voidpay.monetary-re
   | Readonly<{ kind: 'locked'; original: MonetaryResultAnchor; delivery: MonetarySignedDelivery }>
   | Readonly<{ kind: 'no-result'; original: MonetaryResultAnchor }>
   | Readonly<{ kind: 'unknown' | 'refused'; original: MonetaryResultAnchor | null; reason: string }>);
-/** Serialized receiver attestation. This type is not the Sessions verifier's process-local capability. */
 export type MonetarySettlementEvidence = Readonly<{ ok: true; tx: string; grantHash: string; nonce: string; authorizer: string;
   payer: string; payee: string; value: string; authLogIndex: number; transferLogIndex: number; blockNumber: number; confirmations: number;
   assurance: Readonly<{ level: 'rpc-quorum-inclusion'; confirmationBasis: 'lowest-latest-head'; safe: 'not-checked'; finalized: 'not-checked'; requiredConfirmations: number }>;
@@ -122,7 +117,6 @@ export type MonetarySettlementHistory = Readonly<{ kind: 'original-settlement-ac
   recordedAtMs: number; evidenceDigest: string; evidence: MonetarySettlementEvidence }>;
 export type MonetaryUnverifiedSettlement = Readonly<{ version: 'voidpay.monetary-settlement.v0'; kind: 'unconfirmed' | 'unknown' | 'refused';
   original: (MonetaryResultAnchor & Readonly<{grantId: string; grantDigest: string}>) | null; candidateTx: string | null; reason: string }>;
-/** Release of the receiver's local hold only: no transfer, refund or payment confirmation. */
 export type MonetaryBudgetRelease = Readonly<{ kind: 'original-expired-unused-released'; jobId: string; claimId: string; releaseId: string;
   preparedDigest: string; amountAtoms: string; recordedAtMs: number; evidenceDigest: string;
   finalizedBlock: Readonly<{number: string; hash: string; timestamp: number}> }>;

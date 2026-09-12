@@ -10,16 +10,12 @@ import { AutomaticPaymentRefusal, openAutomaticBudget, requirePayment } from './
 export type HostedAutomaticPolicy = Readonly<{
   version: 'voidpay.hosted-customer-automatic-payment.v1'; id: string;
   notBeforeMs: number; expiresAtMs: number; maxTotalAtoms: string; maxPerJobAtoms: string;
-  /** Exact native reviews already approved by the owner. Not tool arguments. */
   approved: readonly BuyerConsentSnapshot[];
 }>;
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
 const reviewRef = (s: BuyerConsentSnapshot) => ({ reviewId: s.review.reviewId, reviewDigest: s.reviewDigest });
 const ORIGIN = 'https://voidly.ai';
 
-/** Hosted account transport only; no identify credential or hosted payment key.
- * Existing consent/begin happens first, under explicit owner authority. This
- * connector neither creates another job nor expands a review's selected data. */
 export function createHostedCustomerAutomaticPayments(options: Readonly<{
   directory: string; policy: HostedAutomaticPolicy; session: CheckoutSession;
   provider: Eip1193Provider; fetch?: typeof fetch; signingTimeoutMs?: number;
@@ -44,8 +40,6 @@ export function createHostedCustomerAutomaticPayments(options: Readonly<{
   catch (error) { store.close(); throw error; }
 }
 
-/** Internal composition seam: the fresh-job controller supplies only a validated
- * original review and atomically adopts its already-reserved operation. */
 export function createHostedPaymentRunner(options: Readonly<{session:CheckoutSession;provider:Eip1193Provider;fetch?:typeof fetch;signingTimeoutMs?:number}>,
   p: Pick<HostedAutomaticPolicy,'expiresAtMs'|'maxPerJobAtoms'>, store: ReturnType<typeof openAutomaticBudget>,
   select: (requestId:string)=>BuyerConsentSnapshot|undefined) {
@@ -67,7 +61,6 @@ export function createHostedPaymentRunner(options: Readonly<{session:CheckoutSes
       store.assertStage(job!, op === 'submit' ? 'submit_intent' : 'claim_intent', Date.now());
     }
     const headers = new Headers(init!.headers); headers.set('origin', ORIGIN); headers.set('accept-encoding', 'identity');
-    // Fixed HTTPS destination; no await after the durable boundary check.
     return fetcher(ORIGIN + input, { ...init, headers, redirect: 'error', credentials: 'omit' });
   };
   const consent = createAuthenticatedBuyerConsentAdapter(options.session, transport);
@@ -150,8 +143,6 @@ export function createHostedPaymentRunner(options: Readonly<{session:CheckoutSes
       const row = store.attempt(view!.jobId!); requirePayment(row && equal(JSON.parse(row.original).snapshot, s), 'ORIGINAL_REQUIRED');
       const old = JSON.parse(row!.original).view as CheckoutView;
       requirePayment(old.checkoutId === view!.checkoutId && old.expiresAtMs === view!.expiresAtMs && old.amountAtoms === view!.amountAtoms, 'ORIGINAL_CHANGED');
-      // The existing decoder reports settlement/result separately. No claim,
-      // signature, submission, replacement job or local budget release follows.
       return checkout.recover(ref);
     },
     status: store.status, revoke: store.revoke, close: store.close,

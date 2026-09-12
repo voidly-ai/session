@@ -1,4 +1,3 @@
-// Synthetic public test-only wallet; no network or chain action.
 import { Wallet } from 'ethers';
 import { hashText } from '../src/customer-hosted/protocol';
 import { decodeMonetaryWalletClaim } from '../src/customer-hosted/monetaryDecoders';
@@ -58,7 +57,6 @@ export async function hostedMaterial(reviewId = 'review-a', requestId = 'review-
     price_min_amount: terms.amountAtoms, price_max_amount: terms.amountAtoms, nonce: ('nonce-' + jobId).padEnd(24, '0'), issued_at: new Date(NOW).toISOString(), expires_at: new Date(quote.workNotAfterMs).toISOString() }
   const created = await createPaymentContext({ grant, amount: terms.amountAtoms, entryPoint: 'receive_with_authorization' })
   if (!created.ok) throw new Error(created.reason)
-  // The SDK canonical encoder orders this known JSON fixture exactly like the server wire form.
   const grantHash = created.context.grantHash, typedData = JSON.parse(canonical(created.context.typedData)) as typeof created.context.typedData, request = { method: 'eth_signTypedData_v4', params: [ADDRESS, JSON.stringify(typedData)] }
   const claim = await decodeMonetaryWalletClaim({ kind: 'original-wallet-request', claimId: 'claim-a', jobId, context, originalId: jobId, grant,
     amount: terms.amountAtoms, grantHash, typedData, request, typedDataFingerprint: await hashText(request.params[1]),
@@ -72,8 +70,6 @@ export async function hostedMaterial(reviewId = 'review-a', requestId = 'review-
   return { snapshot, signing, view, selection: { reviewId, reviewDigest: snapshot.reviewDigest, selectedText: TEXT } }
 }
 
-/** A structurally checked server report for local recovery tests, not actual
- * settlement or an independently authenticated provider receipt. */
 export async function completedHostedHistory(m:Awaited<ReturnType<typeof hostedMaterial>>){
   const o=m.signing.original,c=m.signing.claim;if(c.kind!=='original-wallet-request')throw Error('fixture claim');
   const now=Date.now(),jobId=o.prepared.jobId,tx='0x'+await hashText(jobId),text='Cleaned fixture catalog',outHash=await hashText(text);

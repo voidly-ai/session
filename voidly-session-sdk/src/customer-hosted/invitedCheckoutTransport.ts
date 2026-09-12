@@ -16,7 +16,6 @@ export type CheckoutSubmission = Readonly<{ kind: 'provider-accepted' | 'unresol
 export type CheckoutAuthorizationStatus = Readonly<{ kind: 'original-authorization-accepted'; jobId: string; claimId: string; authorizationDigest: string; preparedDigest: string; acceptedAtMs: number }> | null
 export type CheckoutCancelReceipt = Readonly<{ kind: 'original-unclaimed-cancelled'; jobId: string; cancellationId: string; amountAtoms: string; recordedAtMs: number }>
 export type CheckoutCancel = CheckoutCancelReceipt | Readonly<{ kind: 'original-unclaimed-cancellation-pending'; jobId: string; reason: 'ORIGINAL_NOT_ELIGIBLE' }>
-/** Display-only server assertions. None of these values confer payment authority. */
 export type CheckoutRecovery = Readonly<{
   kind: 'original-monetary-recovery'; jobId: string; source: 'server-reported'
   settlement: Readonly<{ kind: 'accounted'; tx: string; amountAtoms: string; recordedAtMs: number }> | Readonly<{ kind: 'not-checked' | 'unconfirmed' | 'unknown' | 'refused' }>
@@ -260,7 +259,6 @@ async function recovery(value: unknown, pin: Pin): Promise<CheckoutRecovery> {
   return freeze({ kind: 'original-monetary-recovery', jobId, source: 'server-reported', settlement, deliveryRecorded: r.delivery !== null, result, budgetRecovery })
 }
 
-// A syntax pass rejects duplicate decoded keys before JSON.parse loses them.
 function parseJson(raw: string): unknown {
   let cursor = 0
   const whitespace = () => { while (/[\t\n\r ]/.test(raw[cursor] ?? '\0')) cursor++ }
@@ -302,13 +300,9 @@ async function readBody(response: Response, check: () => void, cancelWith: (canc
     if ((!encoding || encoding === 'identity') && declared !== null && Number(declared) !== size) return fail()
     const result = parseJson(new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes.subarray(0, size)))
     check(); done = true; return result
-  } finally { if (!done) void reader.cancel().catch(() => {}); try { reader.releaseLock() } catch { /* Pending hostile streams do not delay refusal. */ } }
+  } finally { if (!done) void reader.cancel().catch(() => {}); try { reader.releaseLock() } catch { } }
 }
 
-/** Bearer-only authenticated account scope. The container separately pins every
- * fresh claim to its captured approved consent; this adapter never invents an owner.
- * No endpoint configuration, automatic retries, wallet calls, logging or storage.
- */
 export function createInvitedCheckoutTransport(session: CheckoutSession, transport: typeof fetch = globalThis.fetch.bind(globalThis)): CheckoutAdapter {
   if (arguments.length > 2 || typeof transport !== 'function') throw new CheckoutTransportError('INVALID_CONFIGURATION')
   let s: Record<string, unknown>
@@ -317,7 +311,7 @@ export function createInvitedCheckoutTransport(session: CheckoutSession, transpo
   const token = s.accessToken, isCurrent = (s.isCurrent as () => boolean).bind(session), signal = s.signal, fetcher = transport
   const pins = new Map<string, Pin>(); let lost = false
   const keyOf = (r: CheckoutReview) => JSON.stringify([r.reviewId, r.reviewDigest])
-  function current() { if (lost || signal.aborted) { lost = true; return false }; try { if (isCurrent()) return true } catch { /* Authentication unavailable. */ }; lost = true; return false }
+  function current() { if (lost || signal.aborted) { lost = true; return false }; try { if (isCurrent()) return true } catch { }; lost = true; return false }
   function reviewInput(input: unknown, extra: readonly string[] = []) {
     const r = record(input, ['reviewId', 'reviewDigest', ...extra]), review = freeze({ reviewId: id(r.reviewId), reviewDigest: digest(r.reviewDigest) })
     return { r, review }
@@ -336,8 +330,6 @@ export function createInvitedCheckoutTransport(session: CheckoutSession, transpo
     const stop = (error: CheckoutTransportError) => { if (closed || interrupted) return; interrupted = error; controller.abort(); cancelBody?.(); rejectWait(error) }
     const abort = () => { lost = true; stop(new CheckoutTransportError('AUTH_REQUIRED', undefined, write && dispatched)) }
     signal.addEventListener('abort', abort, { once: true })
-    // The dedicated proxy/server has a 60-second whole-request budget. Let its
-    // classification arrive first; a lost answer still requires original recovery.
     const timeoutMs = 65000
     const end = performance.now() + timeoutMs, timer = setTimeout(() => stop(unavailable()), timeoutMs)
     function check() {
@@ -396,7 +388,7 @@ export function createInvitedCheckoutTransport(session: CheckoutSession, transpo
       throw unavailable()
     } finally {
       closed = true; clearTimeout(timer); signal.removeEventListener('abort', abort); controller.abort()
-      try { if (response?.body && !response.body.locked) void response.body.cancel().catch(() => {}) } catch { /* Never wait for response cleanup. */ }
+      try { if (response?.body && !response.body.locked) void response.body.cancel().catch(() => {}) } catch { }
     }
   }
   return freeze<CheckoutAdapter>({

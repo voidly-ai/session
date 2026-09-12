@@ -1,4 +1,3 @@
-/** Browser-only wire contract. A parsed record is not payment or execution authority. */
 export const BUYER_CONSENT_VERSION = 'voidpay.invited-buyer-consent.v0' as const
 export const BUYER_CONSENT_MAX_INPUT_BYTES = 16_384
 const BASE_CHAIN = 'eip155:8453' as const
@@ -41,7 +40,6 @@ export type BuyerConsentReview = Readonly<{
 }>
 export type BuyerConsentSnapshot = Readonly<{
   review: BuyerConsentReview; reviewDigest: string
-  /** Only this server record states approval. Budget.acceptedBy alone does not. */
   approval: Readonly<{ requestId: string; approvedAtMs: number }> | null
 }>
 export interface BuyerConsentAdapter {
@@ -106,7 +104,6 @@ function service(value: unknown): BuyerConsentServiceRef {
 function scope(value: unknown): BuyerConsentScope {
   const s = record(value, ['version', 'profileDigest', 'chain', 'asset', 'payerAccount', 'services', 'maxPerJob', 'notBeforeMs', 'expiresAtMs'])
   if (s.version !== 'voidpay.buyer-scope.v1' || s.chain !== BASE_CHAIN || s.asset !== USDC_ASSET) return fail()
-  // Invited consent is pinned by its server policy to one exact service, not a directory selection.
   if (!Array.isArray(s.services) || Object.getPrototypeOf(s.services) !== Array.prototype || s.services.length !== 1 || Reflect.ownKeys(s.services).length !== 2) return fail()
   const d = Object.getOwnPropertyDescriptor(s.services, '0')
   if (!d || !d.enumerable || !('value' in d)) return fail()
@@ -178,7 +175,6 @@ function snapshot(value: unknown): BuyerConsentSnapshot {
     configurationDigest: digest(r.configurationDigest), reviewedAtMs, budget: b, allowance: a, original: o }), reviewDigest: digest(s.reviewDigest), approval })
 }
 
-/** Exact decimal conversion: this wire version admits only Base USDC with six decimals. */
 export function formatBuyerConsentUsdc(amountAtoms: string, monetaryScope: Pick<BuyerConsentScope, 'chain' | 'asset'>): string {
   if (monetaryScope.chain !== BASE_CHAIN || monetaryScope.asset !== USDC_ASSET) return fail()
   const digits = amount(amountAtoms).padStart(7, '0')
@@ -194,7 +190,6 @@ async function hash(value: string): Promise<string> {
   return Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('')
 }
 
-// Duplicate decoded keys are ambiguous even if JSON.parse would silently choose the last one.
 function parseJson(raw: string): unknown {
   let cursor = 0
   const whitespace = () => { while (/[\t\n\r ]/.test(raw[cursor] ?? '\0')) cursor++ }
@@ -236,7 +231,6 @@ async function readBody(response: Response): Promise<unknown> {
   if (response.redirected || !/^application\/json(?:[ \t]*;[ \t]*charset=(?:utf-8|"utf-8"))?[ \t]*$/i.test(response.headers.get('content-type') ?? '')) return fail()
   const declared = response.headers.get('content-length')
   if (declared !== null && (!/^[0-9]{1,20}$/.test(declared) || Number(declared) > RESPONSE_BYTES)) return fail()
-  // Fetch decodes HTTP compression; Content-Length then describes the encoded body.
   const encoding = response.headers.get('content-encoding')?.trim().toLowerCase()
   if (!response.body) return fail()
   const reader = response.body.getReader(), bytes = new Uint8Array(RESPONSE_BYTES)
@@ -261,7 +255,6 @@ const ERROR_STATUSES: Readonly<Record<string, number>> = freeze({ INVALID_INPUT:
   NOT_FOUND: 404, METHOD_NOT_ALLOWED: 405, TIMEOUT: 408, AUTHORITY_CONFLICT: 409, KEYS_UNAVAILABLE: 503,
   INVALID_CONFIGURATION: 503, AUTHORITY_UNAVAILABLE: 503, OUTCOME_UNKNOWN: 503 })
 
-/** No endpoint configuration, ambient authority headers, eager requests, or automatic retries. */
 export type BuyerConsentSession = Readonly<{ accessToken: string; isCurrent: () => boolean; signal: AbortSignal }>
 
 function createConsentAdapter(session?: BuyerConsentSession, fetcher: typeof fetch = globalThis.fetch.bind(globalThis)): BuyerConsentAdapter {
@@ -338,14 +331,11 @@ function createConsentAdapter(session?: BuyerConsentSession, fetcher: typeof fet
   })
 }
 
-/** Preserved cookie-based legacy boundary. New invited checkout uses the explicit bearer factory. */
 export function createSameOriginBuyerConsentAdapter(): BuyerConsentAdapter {
   if (arguments.length !== 0) return fail('INVALID_CONFIGURATION')
   return createConsentAdapter()
 }
 
-/** The host first verifies this account with getCurrentUser. This token is held
- * in memory for one identity generation and sent only to the fixed same-origin BFF. */
 export function createAuthenticatedBuyerConsentAdapter(value: BuyerConsentSession, transport: typeof fetch = globalThis.fetch.bind(globalThis)): BuyerConsentAdapter {
   if (arguments.length > 2 || typeof transport !== 'function') return fail('INVALID_CONFIGURATION')
   const s = record(value, ['accessToken', 'isCurrent', 'signal'])

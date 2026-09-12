@@ -159,8 +159,6 @@ for (const { abs, rel } of files) {
   }
 }
 
-// The optional customer host entry has its own Node-only export and no loader.
-// Its filesystem access is only the caller-owned durable spending journal.
 {
   const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
   const expected = { node: { types: "./dist/customerHosted.d.ts", import: "./dist/customerHosted.mjs", default: "./dist/customerHosted.mjs" } };

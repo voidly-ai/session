@@ -1,4 +1,4 @@
-import { test } from "vitest";
+import { afterAll, beforeAll, test } from "vitest";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { tmpdir } from "node:os";
@@ -12,6 +12,25 @@ function fixture(t) {
   return { dir, path: join(dir, "document.json") };
 }
 const errorCode = (code) => (error) => error instanceof LocalFileError && error.code === code && !error.message.includes("SECRET");
+
+let fifoDirectory;
+let substitutedFifo;
+function setupFifo() {
+  fifoDirectory = fs.mkdtempSync(join(tmpdir(), "voidly-fifo-"));
+  substitutedFifo = join(fifoDirectory, "fifo");
+  try {
+    const started = performance.now();
+    const made = spawnSync("/usr/bin/mkfifo", [substitutedFifo], { timeout: 15000, killSignal: "SIGKILL" });
+    assert.ifError(made.error);
+    assert.equal(made.status, 0);
+    console.info(`node-file FIFO setup: ${Math.round(performance.now() - started)}ms`);
+  } catch (error) {
+    fs.rmSync(fifoDirectory, { recursive: true, force: true });
+    throw error;
+  }
+}
+beforeAll(setupFifo, 30000);
+afterAll(() => { if (fifoDirectory) fs.rmSync(fifoDirectory, { recursive: true, force: true }); });
 
 test("bounded reader returns only unchanged regular bytes and refuses oversize, symlink and malformed caps", (t) => {
   const { dir, path } = fixture(t);
@@ -81,14 +100,14 @@ test("replacement after lstat never reads another inode or follows a symlink", (
 });
 
 test("a no-writer FIFO substituted during open is refused without blocking", (t) => {
-  const { dir, path } = fixture(t);
+  const { path } = fixture(t);
   fs.writeFileSync(path, "old");
-  const fifo = join(dir, "fifo");
-  const made = spawnSync("/usr/bin/mkfifo", [fifo]);
-  assert.equal(made.status, 0);
   let closes = 0;
   const ops = { ...fs,
-    openSync(p, flags) { fs.unlinkSync(path); fs.renameSync(fifo, path); return fs.openSync(p, flags); },
+    openSync(p, flags) {
+      assert.equal(flags & fs.constants.O_NONBLOCK, fs.constants.O_NONBLOCK);
+      fs.unlinkSync(path); fs.renameSync(substitutedFifo, path); return fs.openSync(p, flags);
+    },
     closeSync(fd) { closes++; fs.closeSync(fd); },
   };
   assert.throws(() => readFileCapped(path, 16, { ops }), errorCode("changed"));

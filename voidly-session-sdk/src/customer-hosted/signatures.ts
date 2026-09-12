@@ -1,4 +1,3 @@
-/** Statement authentication only. No payment, endpoint ownership, or signing authority. */
 export const SIGNATURE_VERSION = "voidpay.market.signatures.v0" as const;
 export type SignatureParsingOptions = Readonly<{ allowLoopbackHttp?: boolean }>;
 type StatementBase = Readonly<{
@@ -10,7 +9,6 @@ export type ServiceAgreementStatement = StatementBase & Readonly<{ kind: "servic
 export type QuoteCommitmentStatement = StatementBase & Readonly<{ kind: "quote-commitment"; quoteDigest: string }>;
 export type Statement = EnrollmentStatement | ServiceAgreementStatement | QuoteCommitmentStatement;
 export type SignedStatement = Readonly<{ statement: Statement; signatureHex: string }>;
-/** The caller must obtain this policy independently of the signed envelope. */
 export type TrustedProviderKey = Readonly<{
   registryOrigin: string; providerId: string; keyId: string; publicKeyHex: string;
   revoked: boolean; notBefore: string; expiresAt: string;
@@ -75,7 +73,6 @@ function origin(value: unknown, allowLoopbackHttp: boolean): string {
   return value;
 }
 function expectation(value: unknown): StatementExpectation {
-  // Inspect the discriminant without evaluating accessors before checking the exact shape.
   if (typeof value !== "object" || value === null) fail();
   const kind = Object.getOwnPropertyDescriptor(value, "kind")?.value;
   if (kind === "enrollment") {
@@ -109,11 +106,8 @@ function bytes(value: string): Uint8Array<ArrayBuffer> {
   return Uint8Array.from(value.match(/../g)!, pair => Number.parseInt(pair, 16));
 }
 function toHex(value: ArrayBuffer): string { return Array.from(new Uint8Array(value), b => b.toString(16).padStart(2, "0")).join(""); }
-// Encoding bounds, not curve arithmetic. RFC 8032: canonical y < p and scalar S < L.
 const FIELD_P = bytes("ed" + "ff".repeat(30) + "7f");
 const SCALAR_L = bytes("edd3f55c1a631258d69cf7a2def9de1400000000000000000000000000000010");
-// Canonical small-order y encodings, with the sign bit ignored. Source:
-// libsodium 1.0.20-RELEASE, ge25519_has_small_order (ed25519_ref10.c).
 const SMALL_ORDER_Y = new Set([
   "00".repeat(32), "01" + "00".repeat(31), "ec" + "ff".repeat(30) + "7f",
   "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05",
@@ -143,7 +137,6 @@ function tuple(s: Statement): readonly string[] {
   return [s.version, s.kind, s.registryOrigin, s.providerId, s.keyId, s.issuedAt, s.expiresAt,
     ...(s.kind === "enrollment" ? [s.challengeId, s.nonce] : s.kind === "service-agreement" ? [s.definitionDigest] : [s.quoteDigest])];
 }
-/** Exact UTF-8 JSON tuple bytes. Callers may give these bytes to their own signer. */
 export function encodeStatement(value: unknown, options?: SignatureParsingOptions): Uint8Array<ArrayBuffer> {
   return new TextEncoder().encode(JSON.stringify(tuple(parseStatement(value, options))));
 }
@@ -160,8 +153,6 @@ const RFC_KEY = "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511
 const RFC_SIGNATURE = "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b";
 function support(available: boolean, reason: Ed25519Support["reason"]): Ed25519Support { return Object.freeze({ available, reason }); }
 async function profileVerify(r: Runtime, publicHex: string, signatureHex: string, message: Uint8Array<ArrayBuffer>): Promise<boolean> {
-  // Every path, including self-tests, applies the same strict encoding profile.
-  // Native implementations differ on small-order inputs (WebCrypto 2, 25.3.2).
   let raw: Uint8Array<ArrayBuffer>;
   try { raw = point(publicHex, "INVALID_KEY"); signature(signatureHex); }
   catch (error) { if (error instanceof SignatureError) return false; throw error; }
@@ -170,7 +161,6 @@ async function profileVerify(r: Runtime, publicHex: string, signatureHex: string
 }
 async function probe(r: Runtime): Promise<Ed25519Support> {
   try {
-    // RFC 8032 section 7.1 test 1; only public material is embedded.
     if (!await profileVerify(r, RFC_KEY, RFC_SIGNATURE, new Uint8Array())) return support(false, "self-test-failed");
     if (await profileVerify(r, RFC_KEY, RFC_SIGNATURE, new Uint8Array([1]))) return support(false, "self-test-failed");
     const mutation = "e4" + RFC_SIGNATURE.slice(2);
@@ -196,18 +186,15 @@ function supportFor(r: Runtime): Promise<Ed25519Support> {
   if (cached && cached.importKey === r.importKey && cached.verify === r.verify && cached.digest === r.digest) return cached.result;
   const result = probe(r); supportCache.set(r.subtle, { ...r, result }); return result;
 }
-/** Checks our guarded profile plus native verification, cached per runtime/method identity. */
 export function getEd25519Support(): Promise<Ed25519Support> {
   const r = runtime(); return r ? supportFor(r) : Promise.resolve(support(false, "unavailable"));
 }
-/** Strict signature verification for an already canonical, bounded message. No authority brand. */
 export async function verifyEd25519Bytes(publicKeyHex: string, signatureHex: string, message: Uint8Array): Promise<boolean> {
-  // Intrinsic typed-array access avoids caller getters/methods; capture before any await.
   let captured: Uint8Array<ArrayBuffer>;
   try {
     const size = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(Uint8Array.prototype), "byteLength")!.get!.call(message);
     if (size > 65536 || Object.getPrototypeOf(message) !== Uint8Array.prototype) fail("INVALID_SIGNATURE");
-    captured = new Uint8Array(message); // Typed-array copy uses internal slots, not constructor/species or iteration.
+    captured = new Uint8Array(message);
     point(publicKeyHex, "INVALID_KEY"); signature(signatureHex);
   } catch (error) { if (error instanceof SignatureError) throw error; return fail("INVALID_SIGNATURE"); }
   const r = runtime(); if (!r || !(await supportFor(r)).available) fail("CRYPTO_UNAVAILABLE");
@@ -220,7 +207,6 @@ export async function deriveProviderKeyId(publicKeyHex: string): Promise<string>
   try { return toHex(await r.digest.call(r.subtle, "SHA-256", raw)); } catch { return fail("CRYPTO_UNAVAILABLE"); }
 }
 export async function verifyStatement(value: unknown, policy: VerificationPolicy): Promise<VerifiedStatement> {
-  // Snapshot all caller-controlled data before the first await.
   const p = record(policy, ["trustedKey", "expected", "nowMs"], ["allowLoopbackHttp"]);
   const allow = "allowLoopbackHttp" in p ? bool(p.allowLoopbackHttp) : false;
   const envelope = parseSignedStatement(value, { allowLoopbackHttp: allow });

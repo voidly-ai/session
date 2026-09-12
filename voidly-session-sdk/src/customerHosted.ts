@@ -1,4 +1,3 @@
-/** Node-only customer-hosted jobs. Importing never opens storage or invokes a wallet. */
 import {createHostedBuyerAdapter as wireOnboarding, type HostedBuyerAdapter} from './customer-hosted/hosted-onboarding-interface';
 import {createAuthenticatedBuyerConsentAdapter as wireConsent, type BuyerConsentAdapter, type BuyerConsentSession} from './customer-hosted/invitedBuyerConsent';
 
@@ -13,11 +12,9 @@ function accountTransport(paths:readonly string[], supplied:typeof fetch):typeof
     return supplied(url.href,{...init,headers,redirect:'error',credentials:'omit',referrerPolicy:'no-referrer'});
   };
 }
-/** Fixed account setup only. The application supplies its own genuine session. */
 export function createHostedBuyerAdapter(session:BuyerConsentSession, transport:typeof fetch=globalThis.fetch.bind(globalThis)):HostedBuyerAdapter {
   return wireOnboarding(session,accountTransport(['begin','read','readiness'].map(name=>'/v0/market/buyer-onboarding/'+name),transport));
 }
-/** Explicit native review/approval and original reads; no automatic token refresh. */
 export function createAuthenticatedBuyerConsentAdapter(session:BuyerConsentSession, transport:typeof fetch=globalThis.fetch.bind(globalThis)):BuyerConsentAdapter {
   return wireConsent(session,accountTransport(['reviewScope','approveScope','readScope','reviewRenewal','approveRenewal','readRenewal'].map(name=>'/v0/market/buyer-consent/'+name),transport));
 }
