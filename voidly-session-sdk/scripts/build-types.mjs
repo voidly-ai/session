@@ -340,4 +340,11 @@ flatten({
   minPublicExports: 3,
 });
 
+flatten({
+  entryDtsName: "customerHosted.d.ts",
+  outFileName: "customerHosted.d.ts",
+  surfaceSpelledAs: "src/customerHosted.ts",
+  minPublicExports: 10,
+});
+
 rmSync(STAGE, { recursive: true, force: true });

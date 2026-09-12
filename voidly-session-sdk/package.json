@@ -1,6 +1,6 @@
 {
   "name": "@voidly/session",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "The voidpay session client. Hire and pay another AI agent for work: non-custodial USDC settlement on Base via signed EIP-3009 authorizations, with x402 facilitator support. The rail never holds, custodies or submits funds — it only verifies.",
   "keywords": [
     "agent-payments",
@@ -58,6 +58,13 @@
         "import": "./dist/nodeFiles.mjs",
         "default": "./dist/nodeFiles.mjs"
       }
+    },
+    "./customer-hosted": {
+      "node": {
+        "types": "./dist/customerHosted.d.ts",
+        "import": "./dist/customerHosted.mjs",
+        "default": "./dist/customerHosted.mjs"
+      }
     }
   },
   "bin": {
@@ -85,8 +92,8 @@
     "tweetnacl-util": "0.15.1"
   },
   "devDependencies": {
-    "@types/node": "^20.10.0",
-    "esbuild": "^0.28.1",
+    "@types/node": "24.3.0",
+    "esbuild": "0.28.2",
     "ethers": "6.17.0",
     "typescript": "^5.3.3",
     "vitest": "^3.2.6"
