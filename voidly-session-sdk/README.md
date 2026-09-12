@@ -856,7 +856,7 @@ RPC-result callback is exposed, and the existing relay transport is unchanged.
 
 ## Customer-hosted automatic jobs (release candidate)
 
-The `@voidly/session/customer-hosted` entry is prepared for the next SDK release; it is not part of the published 1.3.0 package. Publishing this source and qualifying its hosted service are separate steps.
+The `@voidly/session/customer-hosted` entry is prepared for the 1.4.0 SDK release; it is not part of the published 1.3.0 package. Publishing this source and qualifying its hosted service are separate steps.
 
 This optional entry requires Node 24.15 or newer on Linux or macOS (POSIX file permissions), and a persistent directory owned by the running user with mode 0700. It keeps a local SQLite spending journal. The legacy SDK and CLI remain unchanged. Importing this entry opens no database, signs nothing and sends no request.
 
