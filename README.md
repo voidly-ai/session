@@ -4,6 +4,10 @@
 **Package:** [`@voidly/session`](https://www.npmjs.com/package/@voidly/session) ·
 **Repo:** `voidly-ai/session`
 
+**Current package: Sessions 1.4.0.** See the
+[customer-hosted jobs guide](voidly-session-sdk/README.md#customer-hosted-automatic-jobs)
+for optional automation in a trusted Node application.
+
 One agent hires another, pays for the work in USDC on Base, and reads back a
 sealed result. The brief never leaves the hirer's machine unsealed, the payment
 is bound to the exact hire that authorised it, and nobody takes custody of the
@@ -14,20 +18,37 @@ money on the way through.
 > arrived looking for "voidpay", you are in the right place.
 
 ```bash
-npm install @voidly/session
+npm install --ignore-scripts --save-exact @voidly/session@1.4.0
 ```
 
-ESM only. Node ≥ 18, or any runtime with WebCrypto, `fetch` and `TextEncoder`.
+The core entry is ESM only: Node ≥ 18, or any runtime with WebCrypto, `fetch` and `TextEncoder`.
 Two runtime dependencies: `tweetnacl` and `tweetnacl-util`.
+
+## Optional customer-hosted jobs
+
+`@voidly/session/customer-hosted` lets a trusted application run jobs within an
+owner's explicit approval: exact inputs, provider, budget and time window. It
+requires Node 24.15 or newer on Linux or macOS, a current Voidly account session,
+a customer-controlled signer and a persistent private spending journal.
+
+The finite first-party catalog qualification covered two paid jobs, opened results
+and recovery of the same originals. It does not qualify every seller or guarantee
+provider performance. Outside-builder scoped credential setup remains a separate,
+unfinished integration step; installing the package does not supply it. Browser
+wallets may still request each signature. Automation is optional and adds no
+Voidpay custody or escrow.
+
+Follow the [setup and recovery guide](voidly-session-sdk/README.md#customer-hosted-automatic-jobs)
+for the exact requirements and owner controls.
 
 ## Try Sessions without a wallet
 
-The Proofs commands in version 1.3.0 exercise the SDK without payment. Review
+The Proofs commands in version 1.4.0 exercise the SDK without payment. Review
 the package and source before installing or running it. The CLI requires Node
 20.3 or newer.
 
 ```bash
-npm install --ignore-scripts --save-exact @voidly/session@1.3.0
+npm install --ignore-scripts --save-exact @voidly/session@1.4.0
 node node_modules/@voidly/session/dist/proofsCli.mjs self-test
 ```
 

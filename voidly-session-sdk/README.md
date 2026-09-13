@@ -21,7 +21,7 @@ is not in this package.
 ## Install
 
 ```bash
-npm install --ignore-scripts --save-exact @voidly/session@1.3.0
+npm install --ignore-scripts --save-exact @voidly/session@1.4.0
 ```
 
 The package name is public. Check the exact version's registry metadata and its
@@ -29,8 +29,10 @@ linked public source before installation; a source checkout does not prove that
 version has been published. If the requested version is unavailable, stop rather
 than substituting another version. Locally reviewed tarballs are for development.
 
-ESM only. Node ≥ 18 or any runtime with WebCrypto, `fetch` and `TextEncoder`.
+The core entry is ESM only: Node ≥ 18 or any runtime with WebCrypto, `fetch` and `TextEncoder`.
 Two exact runtime dependencies: `tweetnacl@1.0.3` and `tweetnacl-util@0.15.1`.
+The optional [customer-hosted entry](#customer-hosted-automatic-jobs) requires
+Node 24.15 or newer on Linux or macOS and a persistent private directory.
 The Proofs CLI requires Node ≥ 20.3. No install or postinstall hooks run. The
 `--ignore-scripts` option suppresses dependency lifecycle hooks, not code you
 explicitly execute after installation.
@@ -38,8 +40,8 @@ explicitly execute after installation.
 > **Building from a checkout instead?** Pack it yourself:
 >
 > ```bash
-> npm run build && npm pack        # → voidly-session-1.3.0.tgz
-> npm install --ignore-scripts --save-exact /path/to/voidly-session-1.3.0.tgz
+> npm run build && npm pack        # → voidly-session-1.4.0.tgz
+> npm install --ignore-scripts --save-exact /path/to/voidly-session-1.4.0.tgz
 > ```
 >
 > `npm run gate` inspects the actual packed bytes. A local build is not registry
@@ -47,6 +49,19 @@ explicitly execute after installation.
 > provenance separately. Provenance establishes origin, not harmlessness.
 
 ---
+
+## 1.4.0 release notes
+
+- Adds the optional Node-only `@voidly/session/customer-hosted` entry for exact
+  approved inputs, bounded spending and original-job recovery.
+- Requires an explicit owner policy, a genuine current Voidly account session,
+  a customer-controlled signer and a durable local spending journal.
+- Finite first-party catalog qualification covered two paid jobs, opened results
+  and recovery of the same originals. Other sellers and outside-builder scoped
+  credential setup are separate integration work; this does not guarantee delivery
+  or provider performance. Automation remains optional.
+
+See [Customer-hosted automatic jobs](#customer-hosted-automatic-jobs) below.
 
 ## 1.3.0 release notes
 
@@ -854,9 +869,11 @@ identity checks are an additional requirement of this SDK verifier. No unchecked
 RPC-result callback is exposed, and the existing relay transport is unchanged.
 
 
-## Customer-hosted automatic jobs (release candidate)
+<a id="customer-hosted-automatic-jobs-release-candidate"></a>
 
-The `@voidly/session/customer-hosted` entry is prepared for the 1.4.0 SDK release; it is not part of the published 1.3.0 package. Publishing this source and qualifying its hosted service are separate steps.
+## Customer-hosted automatic jobs
+
+The `@voidly/session/customer-hosted` entry is included in the published 1.4.0 package. Its finite first-party catalog qualification covered two paid jobs, opened results and recovery of the same originals; the test policy was then revoked. This does not qualify all providers, establish outside-builder credential onboarding or guarantee provider performance. Current service readiness and each owner's setup still apply.
 
 This optional entry requires Node 24.15 or newer on Linux or macOS (POSIX file permissions), and a persistent directory owned by the running user with mode 0700. It keeps a local SQLite spending journal. The legacy SDK and CLI remain unchanged. Importing this entry opens no database, signs nothing and sends no request.
 
