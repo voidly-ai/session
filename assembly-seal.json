@@ -2,7 +2,7 @@
   "algorithm": "sha256",
   "certifies": "every file listed was present, with this content, when the narrative scan read this tree",
   "fileCount": 152,
-  "digest": "8eb1f5d281e4c3e9607c40f9509222cb3733e93ab29b060a9ab698134084f929",
+  "digest": "29aa20c314db1793cd4341080730d1fe7e4d776e3abf9e80842ae963d9372832",
   "files": {
     ".github/workflows/publish-session.yml": "48abdb6a7263cc28a3d1d81aa1c29a5ec0242c55687ca7df4f3b7e1b75ed31cd",
     ".gitignore": "f65e340a45ad56d2e400d29f3751a1cafdab19d30cdaf59d25ec34531c08b116",
@@ -49,7 +49,7 @@
     "voidly-session-sdk/.npmignore": "82d6a901c947c3246831c2be32f32ea3a974a8f1c07239ff07761b25bb80b1e6",
     "voidly-session-sdk/LICENSE": "832750a88f59970a4104ec41f3ef0d7a57865ceb0246dbae4006da2393148818",
     "voidly-session-sdk/NOTICE": "7c0d0fcf461e378aa5a973758364579e0d3775637646b1a1459f190e7a1ee0e2",
-    "voidly-session-sdk/README.md": "4f99d40e5d1a5705a55b3d4d260b15e9b2eb23848f012513340286709f4d4a7b",
+    "voidly-session-sdk/README.md": "3baab7e538751f3c33148ea54de6390f4f760423e326f771a74da6b2f33a4e35",
     "voidly-session-sdk/examples/hire-and-pay.mjs": "1d73512a0a9a73cf077b79bbbf69dae58aafd63b44325c99ce29d5cf3782b8fe",
     "voidly-session-sdk/package-lock.json": "476c474f1912714c966380f55c929a7d37cfb26221651c7fde175db1fdc6e3bc",
     "voidly-session-sdk/package.json": "4ed4c31a5da6fb5bed1f70f4cef5cd85665c7a9c19903ebf2bc76be1d82f0887",
