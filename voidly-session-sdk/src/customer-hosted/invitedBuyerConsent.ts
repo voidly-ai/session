@@ -150,7 +150,7 @@ function original(value: unknown): BuyerConsentOriginal {
     inputDigest: digest(o.inputDigest), inputByteLength: integer(o.inputByteLength, 0, BUYER_CONSENT_MAX_INPUT_BYTES), disclosure: o.disclosure,
     amountAtoms: amount(o.amountAtoms), notBeforeMs, expiresAtMs, maxDurationMs, requiredRemainingMs })
 }
-function snapshot(value: unknown): BuyerConsentSnapshot {
+export function parseBuyerConsentSnapshot(value: unknown): BuyerConsentSnapshot {
   const s = record(value, ['review', 'reviewDigest', 'approval'])
   const r = record(s.review, ['version', 'reviewId', 'requestId', 'permissionId', 'configurationDigest', 'reviewedAtMs', 'budget', 'allowance', 'original'])
   if (r.version !== BUYER_CONSENT_VERSION) return fail()
@@ -299,7 +299,7 @@ function createConsentAdapter(session?: BuyerConsentSession, fetcher: typeof fet
         const envelope = record(raw, ['version', 'data'])
         if (envelope.version !== BUYER_CONSENT_VERSION) return fail()
         if (envelope.data === null && operation === 'readScope') return null
-        const result = snapshot(envelope.data)
+        const result = parseBuyerConsentSnapshot(envelope.data)
         if (result.reviewDigest !== await hash(canonical(result.review))) return fail()
         if (operation === 'approveScope') {
           if (result.review.reviewId !== input.reviewId || result.reviewDigest !== input.reviewDigest || result.approval?.requestId !== input.requestId) return fail()

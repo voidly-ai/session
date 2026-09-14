@@ -24,3 +24,5 @@ export type { BuyerConsentAdapter, BuyerConsentReview, BuyerConsentSnapshot, Buy
 export { AutomaticPaymentRefusal } from './customer-hosted/sqlite-budget';
 export type { CheckoutSession } from './customer-hosted/invitedCheckoutTransport';
 export type { Eip1193Provider } from './customer-hosted/original-payment-wallet';
+export {createCustomerHostedProgramJobs,type CustomerHostedProgramJobs} from './customer-hosted/hosted-program-jobs';
+export {parseOwnerAppProgram,type OwnerAppProgram,type OwnerAppProgramScope,type OwnerAppProgramCredential,type ProgramLifetime} from './customer-hosted/owner-app-program-client';

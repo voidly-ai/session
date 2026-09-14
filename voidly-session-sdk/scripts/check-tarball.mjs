@@ -177,7 +177,7 @@ for (const { abs, rel } of files) {
       findings.push("CUSTOMER HOST BOUNDARY — unreviewed dependency or environment loader");
     const match = body.match(/export\s*\{([^}]+)\};?\s*$/);
     const names = match ? match[1].split(',').map(n => n.trim().split(/\s+as\s+/).at(-1)).filter(Boolean).sort() : [];
-    if (JSON.stringify(names) !== JSON.stringify(["AutomaticPaymentRefusal", "HostedBuyerError", "createAuthenticatedBuyerConsentAdapter", "createCustomerHostedJobs", "createHostedBuyerAdapter"]))
+    if (JSON.stringify(names) !== JSON.stringify(["AutomaticPaymentRefusal", "HostedBuyerError", "createAuthenticatedBuyerConsentAdapter", "createCustomerHostedJobs", "createCustomerHostedProgramJobs", "createHostedBuyerAdapter", "parseOwnerAppProgram"]))
       findings.push("CUSTOMER HOST SURFACE — unexpected runtime export");
     if (body.length > 400000 || !body.includes('from "node:sqlite"') || !body.includes('NODE_24_15_REQUIRED'))
       findings.push("CUSTOMER HOST CONTENT — unexpected size or missing local/runtime guard");

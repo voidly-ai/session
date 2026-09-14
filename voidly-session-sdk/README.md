@@ -877,7 +877,7 @@ The `@voidly/session/customer-hosted` entry is included in the published 1.4.0 p
 
 This optional entry requires Node 24.15 or newer on Linux or macOS (POSIX file permissions), and a persistent directory owned by the running user with mode 0700. It keeps a local SQLite spending journal. The legacy SDK and CLI remain unchanged. Importing this entry opens no database, signs nothing and sends no request.
 
-Your trusted application supplies a genuine Voidly account session and its own EIP-1193 signer. The account owner must sign in through the supported Voidly account flow; `isCurrent` must reflect actual account/session validity and `signal` must abort when that session is retired. This entry does not issue scoped builder credentials, import a browser session, automatically refresh a token or extend any approval. Third-party scoped credential provisioning remains a separate integration requirement.
+For an account-owned runner, your trusted application supplies its own genuine Voidly account session and EIP-1193 signer. An outside app should use the owner-approved program adapter below rather than receive the owner's account token. The account owner must sign in through the supported Voidly account flow; `isCurrent` must reflect actual account/session validity and `signal` must abort when that session is retired. This entry does not issue scoped builder credentials, import a browser session, automatically refresh a token or extend any approval. App credential provisioning remains a separate owner-approved setup; the program adapter does not issue keys.
 
 Use `createHostedBuyerAdapter(session)` to read the fixed service readiness, then retain one setup request ID before calling `begin({requestId,payerAccount,definitionDigest})`. Use the exact definition digest from readiness. After a lost setup response, read the original; do not generate another setup ID. The setup does not prove wallet control or authorize spending. Readiness must return `checkout-ready` for the exact selected service and payer before proceeding.
 
@@ -919,3 +919,38 @@ Each input record is `{kind:'exact-bytes-v1',digest,byteLength}` for the SHA-256
 `submitted` is unconfirmed. Original recovery reports settlement and delivery separately; an accounted payment with an opened result, or the exact native cancellation/unused-release receipt, releases the local active slot. The lifetime reservation stays counted. Native budget enforcement remains independent. No provider performance or wallet funding guarantee is added.
 
 Routine matching work can run without another Voidpay dialog only when the customer has independently configured a noninteractive signer. Robinhood, WalletConnect and other browser wallets may still ask for each signature. Voidpay receives no wallet key and supplies no hosted signing wallet, custody or escrow. Account-key services, provider execution, ranking, operational deployment and native ledger code are absent from this customer entry.
+
+### Owner-approved app programs (1.4.1)
+
+Version 1.4.1 adds `createCustomerHostedProgramJobs` to connect an admitted app to one finite program approved in Voidly. The owner reviews 1–32 distinct exact input hashes, one service, the payer, price, total cap and expiry. The owner screen prepares the encrypted inputs and native approvals, then returns a `ready` program. That means ready for execution, not paid. No quote, job or payment exists from preparing the program alone.
+
+The app keeps its admitted builder credential and RSA application key on its trusted server. Each request carries a program-specific RS256 assertion lasting at most 60 seconds. The fixed API verifies the current owner, app, connection, key generation, program, operation, expiry and revocation. There is no account-token fallback. The app key authenticates the program; it cannot sign a USDC payment.
+
+```ts
+import {
+  createCustomerHostedProgramJobs,
+  parseOwnerAppProgram,
+} from '@voidly/session/customer-hosted';
+
+const jobs = createCustomerHostedProgramJobs({
+  directory: applicationPrivatePersistentDirectory,
+  program: parseOwnerAppProgram(actualApprovedProgramFromVoidly),
+  credential: {
+    builderKey: admittedApplicationCredential,
+    keyId: admittedApplicationKeyId,
+    privateKey: applicationRsaPrivateKeyObject,
+  },
+  lifetime: currentApplicationAuthority, // { isCurrent, signal }; no account token
+  provider: customerConfiguredNoninteractiveSigner,
+});
+
+// Only these finite functions go to the agent. IDs come from the approved program.
+const outcome = await jobs.run({ selectedText: oneApprovedExactInput });
+await jobs.recover(approvedInputSha256);
+```
+
+Each distinct approved input has one fixed native entry and begin request ID. Calling `run` again for that input, including after reopening the persistent directory, only recovers its original; it does not create another review, job or signature. Unknown begin, claim, signing and submission outcomes retain the reservation. There is one active job, and lifetime spending remains counted after completion or an unused-payment release. All processes for the same program must share the same persistent journal.
+
+The customer separately supplies the EIP-1193 payment signer. Every payment retains its exact EIP-3009 authorization, nonce, amount, recipient and timing checks. A browser wallet may still prompt. Program approval grants no signing authority, custody, escrow, guaranteed funding or guaranteed delivery. `submitted` remains unconfirmed until original recovery provides settlement and delivery evidence.
+
+Local `revoke()` prevents further execution but retains recovery. Revoking or expiring the actual app grant also ends its remote read authority; the owner must then recover through their genuine Voidly account. No renewal, replacement program, provider switch or new input is automatic. Production use requires separately qualified owner approval, app credentials, customer signer and hosted endpoints.

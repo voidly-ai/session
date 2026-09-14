@@ -285,16 +285,16 @@ function parseJson(raw: string): unknown {
   }
   value(0); whitespace(); if (cursor !== raw.length) return fail(); return JSON.parse(raw)
 }
-async function readBody(response: Response, check: () => void, cancelWith: (cancel: () => void) => void): Promise<unknown> {
+export async function readCheckoutResponseBody(response: Response, check: () => void, cancelWith: (cancel: () => void) => void, maxBytes = MAX_RESPONSE): Promise<unknown> {
   if (response.redirected || response.type === 'opaqueredirect' || !/^application\/json(?:[ \t]*;[ \t]*charset=(?:utf-8|"utf-8"))?[ \t]*$/i.test(response.headers.get('content-type') ?? '')) return fail()
   const declared = response.headers.get('content-length'), encoding = response.headers.get('content-encoding')?.trim().toLowerCase()
-  if (declared !== null && (!/^[0-9]{1,20}$/.test(declared) || Number(declared) > MAX_RESPONSE) || !response.body) return fail()
-  const reader = response.body.getReader(), bytes = new Uint8Array(MAX_RESPONSE); let size = 0, done = false
+  if (declared !== null && (!/^[0-9]{1,20}$/.test(declared) || Number(declared) > maxBytes) || !response.body) return fail()
+  const reader = response.body.getReader(), bytes = new Uint8Array(maxBytes); let size = 0, done = false
   cancelWith(() => { void reader.cancel().catch(() => {}) })
   try {
     for (;;) {
       check(); const chunk = await reader.read(); check(); if (chunk.done) break
-      if (!(chunk.value instanceof Uint8Array) || !chunk.value.byteLength || chunk.value.byteLength > MAX_RESPONSE - size) return fail()
+      if (!(chunk.value instanceof Uint8Array) || !chunk.value.byteLength || chunk.value.byteLength > maxBytes - size) return fail()
       bytes.set(chunk.value, size); size += chunk.value.byteLength
     }
     if ((!encoding || encoding === 'identity') && declared !== null && Number(declared) !== size) return fail()
@@ -308,7 +308,17 @@ export function createInvitedCheckoutTransport(session: CheckoutSession, transpo
   let s: Record<string, unknown>
   try { s = record(session, ['accessToken', 'isCurrent', 'signal']) } catch { throw new CheckoutTransportError('INVALID_CONFIGURATION') }
   if (typeof s.accessToken !== 'string' || !/^[\x21-\x7e]{1,16384}$/.test(s.accessToken) || typeof s.isCurrent !== 'function' || !(s.signal instanceof AbortSignal)) throw new CheckoutTransportError('INVALID_CONFIGURATION')
-  const token = s.accessToken, isCurrent = (s.isCurrent as () => boolean).bind(session), signal = s.signal, fetcher = transport
+  return createCheckoutWire(session, transport, { Authorization: 'Bearer ' + s.accessToken, 'X-Voidpay-Market-Checkout': '1' }, false)
+}
+export function createProgramCheckoutTransport(session: Pick<CheckoutSession, 'isCurrent' | 'signal'>, transport: typeof fetch): CheckoutAdapter {
+  const s = record(session, ['isCurrent', 'signal'])
+  if (typeof s.isCurrent !== 'function' || !(s.signal instanceof AbortSignal) || typeof transport !== 'function') throw new CheckoutTransportError('INVALID_CONFIGURATION')
+  return createCheckoutWire(session, transport, {}, true)
+}
+function createCheckoutWire(session: Pick<CheckoutSession, 'isCurrent' | 'signal'>, fetcher: typeof fetch, authentication: Record<string,string>, program: boolean): CheckoutAdapter {
+  const isCurrent = session.isCurrent.bind(session), signal = session.signal
+  const version = program ? 'voidpay.owner-app-program.v1' : CHECKOUT_VERSION
+  const statuses = program ? { INVALID_INPUT:400, AUTH_REQUIRED:401, FORBIDDEN:403, NOT_FOUND:404, CONFLICT:409, EXPIRED:410, UNAVAILABLE:503, OUTCOME_UNKNOWN:503 } as Readonly<Record<string,number>> : ERROR_STATUSES
   const pins = new Map<string, Pin>(); let lost = false
   const keyOf = (r: CheckoutReview) => JSON.stringify([r.reviewId, r.reviewDigest])
   function current() { if (lost || signal.aborted) { lost = true; return false }; try { if (isCurrent()) return true } catch { }; lost = true; return false }
@@ -342,18 +352,18 @@ export function createInvitedCheckoutTransport(session: CheckoutSession, transpo
       const inputDigest = selected === undefined ? undefined : await hashText(selected); check()
       dispatched = true
       response = await fetcher('/v0/market/checkout/' + operation, { method: 'POST', mode: 'same-origin', credentials: 'omit', cache: 'no-store', redirect: 'error',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token, 'X-Voidpay-Market-Checkout': '1' }, body, signal: controller.signal })
+        headers: { 'Content-Type': 'application/json', ...authentication }, body, signal: controller.signal })
       try { check() } catch (error) { void response.body?.cancel().catch(() => {}); throw error }
-      const raw = await readBody(response, check, cancel => { cancelBody = cancel }); check()
+      const raw = await readCheckoutResponseBody(response, check, cancel => { cancelBody = cancel }, program ? 65536 : MAX_RESPONSE); check()
       if (response.status !== 200) {
         const e = record(raw, ['version', 'error'])
-        if (e.version !== CHECKOUT_VERSION) return fail()
-        const v = record(e.error, ['code'], ['recovery']), code = str(v.code)
-        if (!Object.hasOwn(ERROR_STATUSES, code) || ERROR_STATUSES[code] !== response.status ||
-          (code === 'OUTCOME_UNKNOWN' ? v.recovery !== 'original-only' : v.recovery !== undefined)) return fail()
+        if (e.version !== version) return fail()
+        const v = program ? record(e.error, ['code', 'retryAuthorized']) : record(e.error, ['code'], ['recovery']), code = str(v.code)
+        if (!Object.hasOwn(statuses, code) || statuses[code] !== response.status ||
+          (program ? v.retryAuthorized !== false : (code === 'OUTCOME_UNKNOWN' ? v.recovery !== 'original-only' : v.recovery !== undefined))) return fail()
         throw new CheckoutTransportError(code, response.status, code === 'OUTCOME_UNKNOWN')
       }
-      const envelope = record(raw, ['version', 'data']); if (envelope.version !== CHECKOUT_VERSION) return fail()
+      const envelope = record(raw, ['version', 'data']); if (envelope.version !== version) return fail()
       const value = envelope.data
       if (operation === 'begin' || operation === 'read') {
         if (value === null && operation === 'read') { if (prior) return fail(); return null }
