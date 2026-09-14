@@ -148,6 +148,19 @@ test('expired authority and invalid app credentials refuse before network, and a
  expect(()=>createCustomerHostedProgramJobs({directory:g.directory,program:g.program,credential:{...g.credential,builderKey:'full-account-token'},
   lifetime:{isCurrent:()=>true,signal:new AbortController().signal},provider:g.provider,fetch:g.transport})).toThrow('INVALID_PROGRAM_CREDENTIAL');
 });
+test('app authentication accepts RSA but refuses wallet keys before any request',async()=>{
+ const f=await fixture();
+ const rejected=[generateKeyPairSync('ec',{namedCurve:'secp256k1'}).privateKey,
+  generateKeyPairSync('rsa',{modulusLength:1024}).privateKey,keys.publicKey,'0x'+'11'.repeat(32)];
+ for(const key of rejected){
+  expect(()=>createCustomerHostedProgramJobs({directory:f.directory,program:f.program,
+   credential:{...f.credential,privateKey:key as typeof f.credential.privateKey},
+   lifetime:{isCurrent:()=>true,signal:f.signal.signal},provider:f.provider,fetch:f.transport})).toThrow('INVALID_PROGRAM_CREDENTIAL');
+  expect(f.calls).toEqual([]);expect(f.requests).toEqual([]);
+ }
+ expect(await f.open().run({selectedText:f.text})).toMatchObject({kind:'submitted'});
+ expect(f.calls).toContain('entry');
+});
 test('an unapproved program can be revoked and displayed without becoming execution authority',async()=>{
  const f=await fixture();const revoked=parseOwnerAppProgram({...f.program,approvedAtMs:null,preparedInputDigests:[],state:'revoked',revokedAtMs:Date.now()});
  expect(revoked.approvedAtMs).toBeNull();expect(()=>f.open(revoked)).toThrow('PROGRAM_APPROVAL_REQUIRED');expect(f.calls).toEqual([]);

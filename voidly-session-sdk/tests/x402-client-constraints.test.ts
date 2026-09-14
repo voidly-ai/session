@@ -173,7 +173,7 @@ describe("this package can read a chain and cannot write to one", () => {
     expect(fetches).toBe(1);
   });
 
-  it("the write-method names appear in src/ only inside the refusal list", () => {
+  it("transaction writes stay refused and private keys stay confined to app authentication", () => {
     const MARKERS = [
       "eth_sendRawTransaction",
       "eth_sendTransaction",
@@ -182,6 +182,7 @@ describe("this package can read a chain and cannot write to one", () => {
       "sendTransaction",
     ];
     const offenders: string[] = [];
+    const privateKeyConsumers: string[] = [];
     for (const f of SRC_FILES) {
       const name = f.slice(SRC.length + 1);
       let src = code(f);
@@ -195,10 +196,15 @@ describe("this package can read a chain and cannot write to one", () => {
         );
       }
       for (const marker of MARKERS) {
+        if (marker === "privateKey" && src.includes(marker)) {
+          privateKeyConsumers.push(name);
+          continue;
+        }
         if (src.includes(marker)) offenders.push(`${name} → ${marker}`);
       }
     }
     expect(offenders).toEqual([]);
+    expect(privateKeyConsumers).toEqual(["customer-hosted/owner-app-program-client.ts"]);
   });
 });
 
