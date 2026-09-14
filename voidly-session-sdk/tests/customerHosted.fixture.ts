@@ -7,8 +7,8 @@ import { planOriginalPaymentTiming } from '../src/customer-hosted/originalPaymen
 import type { BuyerConsentSnapshot, BuyerConsentScope } from '../src/customer-hosted/invitedBuyerConsent';
 import type { CheckoutView } from '../src/customer-hosted/invitedCheckoutTransport';
 export const testPayer = new Wallet('0x' + '11'.repeat(32));
-const ADDRESS = testPayer.address.toLowerCase(), NOW = Date.now(), TEXT = 'sku,title\n1,Widget';
-export async function hostedMaterial(reviewId = 'review-a', requestId = 'review-request-a', jobId = 'job-a', maxActiveJobs = 1) {
+const ADDRESS = testPayer.address.toLowerCase(), NOW = Date.now(), DEFAULT_TEXT = 'sku,title\n1,Widget';
+export async function hostedMaterial(reviewId = 'review-a', requestId = 'review-request-a', jobId = 'job-a', maxActiveJobs = 1, TEXT = DEFAULT_TEXT) {
   const context = { tenantId: 'tenant-a', subjectId: 'builder-a', appId: 'app-a' }
   const service = { providerId: 'provider-a', serviceId: 'catalog', version: '1', definitionDigest: '1'.repeat(64) }
   const lineage = { context, membershipId: 'member-a', budgetId: 'budget-a', budgetDigest: '2'.repeat(64), allowanceId: 'allowance-a',

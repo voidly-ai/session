@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { createAuthenticatedBuyerConsentAdapter, type BuyerConsentSnapshot } from './invitedBuyerConsent';
-import { createInvitedCheckoutTransport, type CheckoutSession, type CheckoutView } from './invitedCheckoutTransport';
+import { createAuthenticatedBuyerConsentAdapter, type BuyerConsentSnapshot, type BuyerConsentAdapter } from './invitedBuyerConsent';
+import { createInvitedCheckoutTransport, type CheckoutSession, type CheckoutView, type CheckoutAdapter } from './invitedCheckoutTransport';
 import { canSubmitOriginalPayment, planOriginalPaymentTiming } from './originalPaymentTiming';
 import { canonical, equal, id, amount, integer, snapshot, parseMonetaryOriginal, type MonetaryOriginal } from './monetaryProtocol';
 import { decodeMonetaryWalletClaim, decodeRetainedMonetaryWalletClaim } from './monetaryDecoders';
@@ -40,9 +40,10 @@ export function createHostedCustomerAutomaticPayments(options: Readonly<{
   catch (error) { store.close(); throw error; }
 }
 
-export function createHostedPaymentRunner(options: Readonly<{session:CheckoutSession;provider:Eip1193Provider;fetch?:typeof fetch;signingTimeoutMs?:number}>,
+export function createHostedPaymentRunner(options: Readonly<{session:Pick<CheckoutSession,'isCurrent'|'signal'>;provider:Eip1193Provider;fetch?:typeof fetch;signingTimeoutMs?:number}>,
   p: Pick<HostedAutomaticPolicy,'expiresAtMs'|'maxPerJobAtoms'>, store: ReturnType<typeof openAutomaticBudget>,
-  select: (requestId:string)=>BuyerConsentSnapshot|undefined) {
+  select: (requestId:string)=>BuyerConsentSnapshot|undefined,
+  delegated?: Readonly<{consent:Pick<BuyerConsentAdapter,'readScope'>;checkout:(transport:typeof fetch)=>CheckoutAdapter}>) {
   const provider = options.provider, signRequest = provider?.request, fetcher = options.fetch ?? globalThis.fetch.bind(globalThis);
   const timeout = options.signingTimeoutMs ?? 10000;
   requirePayment(typeof signRequest === 'function' && typeof fetcher === 'function', 'INVALID_CONFIGURATION');
@@ -63,8 +64,8 @@ export function createHostedPaymentRunner(options: Readonly<{session:CheckoutSes
     const headers = new Headers(init!.headers); headers.set('origin', ORIGIN); headers.set('accept-encoding', 'identity');
     return fetcher(ORIGIN + input, { ...init, headers, redirect: 'error', credentials: 'omit' });
   };
-  const consent = createAuthenticatedBuyerConsentAdapter(options.session, transport);
-  const checkout = createInvitedCheckoutTransport(options.session, transport);
+  const consent = delegated?.consent ?? createAuthenticatedBuyerConsentAdapter(options.session as CheckoutSession, transport);
+  const checkout = delegated ? delegated.checkout(transport) : createInvitedCheckoutTransport(options.session as CheckoutSession, transport);
   const unknown = (jobId: string) => Object.freeze({ kind: 'recover-original' as const, jobId,
     stage: store.attempt(jobId)?.stage ?? 'unknown', reason: 'ORIGINAL_UNCONFIRMED' });
   function bind(original: MonetaryOriginal, s: BuyerConsentSnapshot, view: CheckoutView) {
