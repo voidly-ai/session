@@ -920,9 +920,9 @@ Each input record is `{kind:'exact-bytes-v1',digest,byteLength}` for the SHA-256
 
 Routine matching work can run without another Voidpay dialog only when the customer has independently configured a noninteractive signer. Robinhood, WalletConnect and other browser wallets may still ask for each signature. Voidpay receives no wallet key and supplies no hosted signing wallet, custody or escrow. Account-key services, provider execution, ranking, operational deployment and native ledger code are absent from this customer entry.
 
-### Owner-approved app programs (1.4.1)
+### Owner-approved app programs (1.4.2)
 
-Version 1.4.1 adds `createCustomerHostedProgramJobs` to connect an admitted app to one finite program approved in Voidly. The owner reviews 1–32 distinct exact input hashes, one service, the payer, price, total cap and expiry. The owner screen prepares the encrypted inputs and native approvals, then returns a `ready` program. That means ready for execution, not paid. No quote, job or payment exists from preparing the program alone.
+Version 1.4.2 adds `createCustomerHostedProgramJobs` to connect an admitted app to one finite program approved in Voidly. The owner reviews 1–32 distinct exact input hashes, one service, the payer, price, total cap and expiry. The owner screen prepares the encrypted inputs and native approvals, then returns a `ready` program. That means ready for execution, not paid. No quote, job or payment exists from preparing the program alone.
 
 The app keeps its admitted builder credential and RSA application key on its trusted server. Each request carries a program-specific RS256 assertion lasting at most 60 seconds. The fixed API verifies the current owner, app, connection, key generation, program, operation, expiry and revocation. There is no account-token fallback. The app key authenticates the program; it cannot sign a USDC payment.
 
