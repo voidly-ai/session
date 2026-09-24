@@ -21,7 +21,7 @@ is not in this package.
 ## Install
 
 ```bash
-npm install --ignore-scripts --save-exact @voidly/session@1.4.0
+npm install --ignore-scripts --save-exact @voidly/session@1.4.3
 ```
 
 The package name is public. Check the exact version's registry metadata and its
@@ -40,8 +40,8 @@ explicitly execute after installation.
 > **Building from a checkout instead?** Pack it yourself:
 >
 > ```bash
-> npm run build && npm pack        # → voidly-session-1.4.0.tgz
-> npm install --ignore-scripts --save-exact /path/to/voidly-session-1.4.0.tgz
+> npm run build && npm pack        # → voidly-session-1.4.3.tgz
+> npm install --ignore-scripts --save-exact /path/to/voidly-session-1.4.3.tgz
 > ```
 >
 > `npm run gate` inspects the actual packed bytes. A local build is not registry
@@ -49,6 +49,17 @@ explicitly execute after installation.
 > provenance separately. Provenance establishes origin, not harmlessness.
 
 ---
+
+## 1.4.3 release notes
+
+- `submitHire` and `submitSettlementHint` no longer follow HTTP redirects. A
+  3xx (or a browser `opaqueredirect`) is returned as
+  `undelivered` / `hire_redirect_refused` for a hire and `unrecognized` /
+  `hint_redirect_refused` for a hint, before the response body is read.
+- Both refuse a URL that is not `https:` (plain `http:` is allowed only to a
+  literal loopback address such as `127.0.0.1` or `[::1]`). Nothing is signed
+  or sent; the result is `unbuildable` with `hire_url_not_https` or
+  `hint_url_not_https`.
 
 ## 1.4.0 release notes
 
@@ -466,7 +477,7 @@ switch (out.kind) {
   case "undelivered": break;
   case "refused": /* see `steersPayment` below */ break;
   case "unverifiable": /* do NOT pay */ break;
-  case "unbuildable": /* fix the arguments */ break;
+  case "unbuildable": /* fix the arguments (includes a non-https url) */ break;
 }
 
 // 5. NOTHING. The provider spends the authorization it now holds and writes its

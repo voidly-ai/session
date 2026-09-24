@@ -40,7 +40,9 @@ export type { FetchLike } from "./protocol";
 
 const LOOPBACK_V4 = /^127\.(?:\d{1,3})\.(?:\d{1,3})\.(?:\d{1,3})$/;
 
-function isLiteralLoopbackHost(hostname: string): boolean {
+// Shared with hirer.ts so the hire and RPC URL floors stay identical.
+// Deliberately not re-exported from index.ts.
+export function isLiteralLoopbackHost(hostname: string): boolean {
   if (hostname === "[::1]") return true;
   if (!LOOPBACK_V4.test(hostname)) return false;
   return hostname.split(".").every((o) => Number(o) >= 0 && Number(o) <= 255);

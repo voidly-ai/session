@@ -64,6 +64,7 @@ import type {
 import { buildSettlementHint } from "./settlementHint";
 import type { SettlementHintEnvelope } from "./settlementHint";
 import { postRecover } from "./transport";
+import { isLiteralLoopbackHost } from "./relay";
 import type { SessionEndpoint } from "./transport";
 import { SessionTransportError } from "./errors";
 import { webCryptoEntropy } from "./entropy";
@@ -642,12 +643,25 @@ export type SubmitHireResult =
   | { kind: "refused"; refused: SessionHireRefused; retryable: boolean; steersPayment: boolean }
   | { kind: "undelivered"; detail: string }
   | { kind: "unverifiable"; detail: HireRefuseDetail | "response_malformed" }
-  | { kind: "unbuildable"; reason: HireRefuseDetail | "grant_hash_mismatch" };
+  | { kind: "unbuildable"; reason: HireRefuseDetail | "grant_hash_mismatch" | "hire_url_not_https" };
 
 type AssertTrue<T extends true> = T;
 type _SubmitHireCoversTransport = AssertTrue<
   PostHireOutcome extends SubmitHireResult ? true : false
 >;
+
+// True for https, or http to a literal loopback address. Unparseable URLs are
+// refused.
+function isHttpsOrLiteralLoopback(url: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol === "https:") return true;
+  return parsed.protocol === "http:" && isLiteralLoopbackHost(parsed.hostname);
+}
 
 export async function submitHire(input: {
   readonly url: string;
@@ -659,6 +673,14 @@ export async function submitHire(input: {
   readonly fetchImpl: FetchLike;
   readonly signal?: AbortSignal;
 }): Promise<SubmitHireResult> {
+  // The hire carries a signed payment authorization, so it is only sent over
+  // https (or http to a literal loopback address, for local testing). Nothing
+  // has been signed or sent yet, so the refusal is "unbuildable", not a
+  // retryable "undelivered".
+  if (!isHttpsOrLiteralLoopback(input.url)) {
+    return { kind: "unbuildable", reason: "hire_url_not_https" };
+  }
+
   const anchor = await checkGrantHashAnchor(input.wire.grant, input.grantHash);
   if (anchor !== null) return { kind: "unbuildable", reason: anchor };
 
@@ -730,7 +752,8 @@ export type SubmitSettlementHintRefusal =
   | "hint_url_conflict"
   | "provider_did_unusable"
   | "evidence_unusable"
-  | "signature_failed";
+  | "signature_failed"
+  | "hint_url_not_https";
 
 export type SubmitSettlementHintResult =
   | { kind: "acknowledged"; status: number; hint: SettlementHintEnvelope }
@@ -758,6 +781,10 @@ export async function submitSettlementHint(input: {
 } & SettlementHintTarget): Promise<SubmitSettlementHintResult> {
   const target = resolveSettlementHintTarget(input);
   if (!target.ok) return { kind: "unbuildable", reason: target.reason };
+  // Same transport floor as submitHire, applied before anything is signed.
+  if (!isHttpsOrLiteralLoopback(target.url)) {
+    return { kind: "unbuildable", reason: "hint_url_not_https" };
+  }
 
   const anchor = await checkGrantHashAnchor(input.grant, input.grantHash);
   if (anchor !== null) return { kind: "unbuildable", reason: anchor };
@@ -799,10 +826,24 @@ export async function submitSettlementHint(input: {
       method: "POST",
       headers: { "content-type": HINT_MEDIA_TYPE, accept: HINT_MEDIA_TYPE },
       body: payload,
+      // Redirects are never followed: another host's 202 must not be read as
+      // this door's acknowledgement.
+      redirect: "manual",
       ...(input.signal ? { signal: input.signal } : {}),
     });
   } catch {
     return { kind: "undelivered", detail: "transport_failed" };
+  }
+
+  // Checked before the body is read. `redirected` also catches a fetchImpl
+  // that ignored redirect: "manual".
+  const responseType: string = response.type;
+  if (
+    responseType === "opaqueredirect" ||
+    response.redirected === true ||
+    (response.status >= 300 && response.status <= 399)
+  ) {
+    return { kind: "unrecognized", status: response.status, detail: "hint_redirect_refused" };
   }
 
   let text: string;
