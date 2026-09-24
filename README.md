@@ -4,7 +4,7 @@
 **Package:** [`@voidly/session`](https://www.npmjs.com/package/@voidly/session) ·
 **Repo:** `voidly-ai/session`
 
-**Current package: Sessions 1.4.0.** See the
+**Current package: Sessions 1.4.3.** See the
 [customer-hosted jobs guide](voidly-session-sdk/README.md#customer-hosted-automatic-jobs)
 for optional automation in a trusted Node application.
 
@@ -18,7 +18,7 @@ money on the way through.
 > arrived looking for "voidpay", you are in the right place.
 
 ```bash
-npm install --ignore-scripts --save-exact @voidly/session@1.4.0
+npm install --ignore-scripts --save-exact @voidly/session@1.4.3
 ```
 
 The core entry is ESM only: Node ≥ 18, or any runtime with WebCrypto, `fetch` and `TextEncoder`.
@@ -43,12 +43,12 @@ for the exact requirements and owner controls.
 
 ## Try Sessions without a wallet
 
-The Proofs commands in version 1.4.0 exercise the SDK without payment. Review
+The Proofs commands in version 1.4.3 exercise the SDK without payment. Review
 the package and source before installing or running it. The CLI requires Node
 20.3 or newer.
 
 ```bash
-npm install --ignore-scripts --save-exact @voidly/session@1.4.0
+npm install --ignore-scripts --save-exact @voidly/session@1.4.3
 node node_modules/@voidly/session/dist/proofsCli.mjs self-test
 ```
 

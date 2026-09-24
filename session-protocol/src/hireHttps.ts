@@ -171,10 +171,25 @@ export async function postHire(input: PostHireInput): Promise<PostHireOutcome> {
       method: "POST",
       headers: { "content-type": HIRE_MEDIA_TYPE, accept: HIRE_MEDIA_TYPE },
       body: JSON.stringify(input.message),
+      // Redirects are never followed: a 307/308 would re-send the signed hire
+      // to whatever host the Location header names.
+      redirect: "manual",
       ...(input.signal ? { signal: input.signal } : {}),
     });
   } catch {
     return { kind: "undelivered", detail: "transport_failed" };
+  }
+
+  // Checked before the body is read. Browsers report a manual redirect as
+  // "opaqueredirect" (status 0); Node returns the 3xx response itself.
+  // `redirected` catches a fetch implementation that ignored "manual".
+  const responseType: string = response.type;
+  if (
+    responseType === "opaqueredirect" ||
+    response.redirected === true ||
+    (response.status >= 300 && response.status <= 399)
+  ) {
+    return { kind: "undelivered", detail: "hire_redirect_refused" };
   }
 
   let text: string;

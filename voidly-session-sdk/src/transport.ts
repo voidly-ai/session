@@ -8,6 +8,7 @@ import type {
   TaskRecoveryRequest,
   TaskResultCapsule,
 } from "./protocol";
+import { isHttpsOrLiteralLoopback } from "./relay";
 
 /**
  * THE DEFAULT WHOLE-CALL DEADLINE, IN MILLISECONDS.
@@ -175,6 +176,30 @@ function unfinishedCall(path: string, cause: unknown, deadlineMs: number | null)
   );
 }
 
+// Redirect refusals raised by post(), so recoverResult can name them without
+// reading the message. Not re-exported from index.ts.
+const redirectRefusals = new WeakSet<SessionTransportError>();
+
+export function isRedirectRefusal(err: unknown): boolean {
+  return err instanceof SessionTransportError && redirectRefusals.has(err);
+}
+
+function redirectRefused(path: string, status: number, followed: boolean): SessionTransportError {
+  const what = followed
+    ? `${path} was redirected and the fetch implementation followed it anyway, so the ` +
+      "request also reached the host the redirect named."
+    : `${path} answered with a redirect (${status}) and it was not followed.`;
+  const err = new SessionTransportError(
+    `session_redirect_refused: ${what} The first host received the request and may ` +
+      `have acted on it. ${doorConsequence(path)} Calling the same URL again is refused ` +
+      "the same way: point baseUrl at the host that answers directly.",
+    status,
+    "",
+  );
+  redirectRefusals.add(err);
+  return err;
+}
+
 function requestNeverSent(path: string, what: string, cause: unknown): SessionUsageError {
   return new SessionUsageError(
     `session_request_not_sent: ${path} was never dialled — ${what}. NOTHING REACHED ` +
@@ -211,6 +236,17 @@ async function post<T>(
     );
   }
 
+  // The doors carry signed requests and proof headers, so they are only sent
+  // over https (or http to a literal loopback address, for local testing).
+  if (!isHttpsOrLiteralLoopback(url)) {
+    throw new SessionUsageError(
+      `session_url_not_https: ${path} was never dialled — the endpoint is not https. ` +
+        "Plain http is allowed only to a literal loopback address such as 127.0.0.1 " +
+        "or [::1]. NOTHING REACHED THE NETWORK, so nothing was journaled or spent. " +
+        "Fix the baseUrl and call again.",
+    );
+  }
+
   const clock = deadlineMs === null ? null : armDeadline(deadlineMs);
 
   const refuseIfAbandoned = (at: string): void => {
@@ -224,12 +260,27 @@ async function post<T>(
         method: "POST",
         headers: { "content-type": "application/json", ...(headers ?? {}) },
         body: payload,
+        // Redirects are never followed: a 307/308 would re-send the signed
+        // request and any proof header to whatever host Location names.
+        redirect: "manual",
         ...(clock === null ? {} : { signal: clock.signal }),
       });
     } catch (err) {
       throw unfinishedCall(path, err, clock !== null && clock.fired ? deadlineMs : null);
     }
     refuseIfAbandoned("the deadline fired before the response was in hand");
+
+    // Checked before the body is read. Browsers report a manual redirect as
+    // "opaqueredirect" (status 0); Node returns the 3xx response itself.
+    // `redirected` catches a fetch implementation that ignored "manual".
+    const responseType: string = res.type;
+    if (
+      responseType === "opaqueredirect" ||
+      res.redirected === true ||
+      (res.status >= 300 && res.status <= 399)
+    ) {
+      throw redirectRefused(path, res.status, res.redirected === true);
+    }
 
     let text: string;
     try {

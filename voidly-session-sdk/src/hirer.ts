@@ -63,7 +63,8 @@ import type {
 } from "./submission";
 import { buildSettlementHint } from "./settlementHint";
 import type { SettlementHintEnvelope } from "./settlementHint";
-import { postRecover } from "./transport";
+import { isRedirectRefusal, postRecover, SESSION_PATHS } from "./transport";
+import { isHttpsOrLiteralLoopback } from "./relay";
 import type { SessionEndpoint } from "./transport";
 import { SessionTransportError } from "./errors";
 import { webCryptoEntropy } from "./entropy";
@@ -642,7 +643,7 @@ export type SubmitHireResult =
   | { kind: "refused"; refused: SessionHireRefused; retryable: boolean; steersPayment: boolean }
   | { kind: "undelivered"; detail: string }
   | { kind: "unverifiable"; detail: HireRefuseDetail | "response_malformed" }
-  | { kind: "unbuildable"; reason: HireRefuseDetail | "grant_hash_mismatch" };
+  | { kind: "unbuildable"; reason: HireRefuseDetail | "grant_hash_mismatch" | "hire_url_not_https" };
 
 type AssertTrue<T extends true> = T;
 type _SubmitHireCoversTransport = AssertTrue<
@@ -659,6 +660,14 @@ export async function submitHire(input: {
   readonly fetchImpl: FetchLike;
   readonly signal?: AbortSignal;
 }): Promise<SubmitHireResult> {
+  // The hire carries a signed payment authorization, so it is only sent over
+  // https (or http to a literal loopback address, for local testing). Nothing
+  // has been signed or sent yet, so the refusal is "unbuildable", not a
+  // retryable "undelivered".
+  if (!isHttpsOrLiteralLoopback(input.url)) {
+    return { kind: "unbuildable", reason: "hire_url_not_https" };
+  }
+
   const anchor = await checkGrantHashAnchor(input.wire.grant, input.grantHash);
   if (anchor !== null) return { kind: "unbuildable", reason: anchor };
 
@@ -730,7 +739,8 @@ export type SubmitSettlementHintRefusal =
   | "hint_url_conflict"
   | "provider_did_unusable"
   | "evidence_unusable"
-  | "signature_failed";
+  | "signature_failed"
+  | "hint_url_not_https";
 
 export type SubmitSettlementHintResult =
   | { kind: "acknowledged"; status: number; hint: SettlementHintEnvelope }
@@ -758,6 +768,10 @@ export async function submitSettlementHint(input: {
 } & SettlementHintTarget): Promise<SubmitSettlementHintResult> {
   const target = resolveSettlementHintTarget(input);
   if (!target.ok) return { kind: "unbuildable", reason: target.reason };
+  // Same transport floor as submitHire, applied before anything is signed.
+  if (!isHttpsOrLiteralLoopback(target.url)) {
+    return { kind: "unbuildable", reason: "hint_url_not_https" };
+  }
 
   const anchor = await checkGrantHashAnchor(input.grant, input.grantHash);
   if (anchor !== null) return { kind: "unbuildable", reason: anchor };
@@ -799,10 +813,24 @@ export async function submitSettlementHint(input: {
       method: "POST",
       headers: { "content-type": HINT_MEDIA_TYPE, accept: HINT_MEDIA_TYPE },
       body: payload,
+      // Redirects are never followed: another host's 202 must not be read as
+      // this door's acknowledgement.
+      redirect: "manual",
       ...(input.signal ? { signal: input.signal } : {}),
     });
   } catch {
     return { kind: "undelivered", detail: "transport_failed" };
+  }
+
+  // Checked before the body is read. `redirected` also catches a fetchImpl
+  // that ignored redirect: "manual".
+  const responseType: string = response.type;
+  if (
+    responseType === "opaqueredirect" ||
+    response.redirected === true ||
+    (response.status >= 300 && response.status <= 399)
+  ) {
+    return { kind: "unrecognized", status: response.status, detail: "hint_redirect_refused" };
   }
 
   let text: string;
@@ -896,6 +924,7 @@ const RECOVERY_REQUEST_TTL_MS = 5 * 60_000;
 export type RecoverResultRefusal =
   | "grant_hash_mismatch"
   | "hirer_did_unusable"
+  | "recover_url_not_https"
   | SessionResultRejectReason;
 
 export type RecoverResultOutcome =
@@ -924,6 +953,17 @@ export async function recoverResult(input: {
   readonly ttlMs?: number;
   readonly entropy?: SessionEntropy;
 }): Promise<RecoverResultOutcome> {
+  // Same transport floor as submitHire, applied before the recovery request is
+  // signed. A baseUrl that is not a string is left to postRecover, which
+  // reports it as a usage error.
+  const baseUrl: unknown = input.endpoint.baseUrl;
+  if (
+    typeof baseUrl === "string" &&
+    !isHttpsOrLiteralLoopback(`${baseUrl.replace(/\/+$/, "")}${SESSION_PATHS.recover}`)
+  ) {
+    return { kind: "unbuildable", reason: "recover_url_not_https" };
+  }
+
   const anchor = await checkGrantHashAnchor(input.wire.grant, input.grantHash);
   if (anchor !== null) return { kind: "unbuildable", reason: anchor };
 
@@ -952,6 +992,9 @@ export async function recoverResult(input: {
     });
   } catch (err) {
     if (!(err instanceof SessionTransportError)) throw err;
+    if (isRedirectRefusal(err)) {
+      return { kind: "unrecognized", status: err.status, detail: "recover_redirect_refused" };
+    }
     if (err.status === 0) return { kind: "undelivered", detail: err.message };
     return { kind: "unrecognized", status: err.status, detail: err.message };
   }

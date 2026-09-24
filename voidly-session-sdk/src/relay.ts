@@ -40,10 +40,25 @@ export type { FetchLike } from "./protocol";
 
 const LOOPBACK_V4 = /^127\.(?:\d{1,3})\.(?:\d{1,3})\.(?:\d{1,3})$/;
 
-function isLiteralLoopbackHost(hostname: string): boolean {
+// Shared with hirer.ts and transport.ts so the hire, session-door and RPC URL
+// floors stay identical. Deliberately not re-exported from index.ts.
+export function isLiteralLoopbackHost(hostname: string): boolean {
   if (hostname === "[::1]") return true;
   if (!LOOPBACK_V4.test(hostname)) return false;
   return hostname.split(".").every((o) => Number(o) >= 0 && Number(o) <= 255);
+}
+
+// True for https, or http to a literal loopback address. Unparseable URLs are
+// refused. Deliberately not re-exported from index.ts.
+export function isHttpsOrLiteralLoopback(url: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol === "https:") return true;
+  return parsed.protocol === "http:" && isLiteralLoopbackHost(parsed.hostname);
 }
 
 export type RpcRefusal =
