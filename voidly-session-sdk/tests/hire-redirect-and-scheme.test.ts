@@ -214,6 +214,32 @@ describe("postHire never follows a redirect", () => {
     }
   });
 
+  it("a fetchImpl that ignored manual and followed anyway is caught by `redirected`", async () => {
+    const hire = await builtHire();
+    const { b, aUrl } = await redirectPair(307);
+    const following: FetchLike = (u, i) => fetch(u, { ...i, redirect: "follow" });
+    const out = await submit(hire, aUrl, following);
+    // The fetchImpl, not the SDK, re-sent the hire to B. B's answer is still
+    // not read as the provider's.
+    expect(b.hits).toBe(1);
+    expect(out).toEqual({ kind: "undelivered", detail: "hire_redirect_refused" });
+  });
+
+  it("`redirected` is checked before the body is read", async () => {
+    const hire = await builtHire();
+    let bodyRead = false;
+    const followed = {
+      type: "basic",
+      status: 200,
+      redirected: true,
+      headers: new Headers({ "content-type": "application/json" }),
+      text: async () => { bodyRead = true; return JSON.stringify({ note: SYNTH }); },
+    } as unknown as Response;
+    const out = await submit(hire, "https://provider.invalid/session/accept", async () => followed);
+    expect(out).toEqual({ kind: "undelivered", detail: "hire_redirect_refused" });
+    expect(bodyRead).toBe(false);
+  });
+
   it("a 200 and a 5xx still go down the ordinary path (the floor is 3xx only)", async () => {
     const hire = await builtHire();
     const ok = await submit(hire, "https://provider.invalid/session/accept", async () =>

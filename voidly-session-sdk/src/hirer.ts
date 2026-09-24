@@ -63,8 +63,8 @@ import type {
 } from "./submission";
 import { buildSettlementHint } from "./settlementHint";
 import type { SettlementHintEnvelope } from "./settlementHint";
-import { postRecover } from "./transport";
-import { isLiteralLoopbackHost } from "./relay";
+import { isRedirectRefusal, postRecover, SESSION_PATHS } from "./transport";
+import { isHttpsOrLiteralLoopback } from "./relay";
 import type { SessionEndpoint } from "./transport";
 import { SessionTransportError } from "./errors";
 import { webCryptoEntropy } from "./entropy";
@@ -650,19 +650,6 @@ type _SubmitHireCoversTransport = AssertTrue<
   PostHireOutcome extends SubmitHireResult ? true : false
 >;
 
-// True for https, or http to a literal loopback address. Unparseable URLs are
-// refused.
-function isHttpsOrLiteralLoopback(url: string): boolean {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return false;
-  }
-  if (parsed.protocol === "https:") return true;
-  return parsed.protocol === "http:" && isLiteralLoopbackHost(parsed.hostname);
-}
-
 export async function submitHire(input: {
   readonly url: string;
   readonly wire: HireWire;
@@ -937,6 +924,7 @@ const RECOVERY_REQUEST_TTL_MS = 5 * 60_000;
 export type RecoverResultRefusal =
   | "grant_hash_mismatch"
   | "hirer_did_unusable"
+  | "recover_url_not_https"
   | SessionResultRejectReason;
 
 export type RecoverResultOutcome =
@@ -965,6 +953,17 @@ export async function recoverResult(input: {
   readonly ttlMs?: number;
   readonly entropy?: SessionEntropy;
 }): Promise<RecoverResultOutcome> {
+  // Same transport floor as submitHire, applied before the recovery request is
+  // signed. A baseUrl that is not a string is left to postRecover, which
+  // reports it as a usage error.
+  const baseUrl: unknown = input.endpoint.baseUrl;
+  if (
+    typeof baseUrl === "string" &&
+    !isHttpsOrLiteralLoopback(`${baseUrl.replace(/\/+$/, "")}${SESSION_PATHS.recover}`)
+  ) {
+    return { kind: "unbuildable", reason: "recover_url_not_https" };
+  }
+
   const anchor = await checkGrantHashAnchor(input.wire.grant, input.grantHash);
   if (anchor !== null) return { kind: "unbuildable", reason: anchor };
 
@@ -993,6 +992,9 @@ export async function recoverResult(input: {
     });
   } catch (err) {
     if (!(err instanceof SessionTransportError)) throw err;
+    if (isRedirectRefusal(err)) {
+      return { kind: "unrecognized", status: err.status, detail: "recover_redirect_refused" };
+    }
     if (err.status === 0) return { kind: "undelivered", detail: err.message };
     return { kind: "unrecognized", status: err.status, detail: err.message };
   }

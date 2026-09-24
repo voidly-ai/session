@@ -60,6 +60,18 @@ explicitly execute after installation.
   literal loopback address such as `127.0.0.1` or `[::1]`). Nothing is signed
   or sent; the result is `unbuildable` with `hire_url_not_https` or
   `hint_url_not_https`.
+- For local testing, `http://localhost` is refused; use `http://127.0.0.1`.
+- The session doors (`postRedeem`, `postDeliver`, `postRecover`,
+  `postReattest`) follow the same two rules. A non-https `baseUrl` throws
+  `SessionUsageError` (`session_url_not_https`) before anything is sent; a
+  redirect throws `SessionTransportError` (`session_redirect_refused`).
+  `recoverResult` returns `unbuildable` / `recover_url_not_https` and
+  `unrecognized` / `recover_redirect_refused` for the same cases.
+- The x402 facilitator `/settle` POST no longer follows redirects. A redirect
+  is returned as `facilitator_redirect_refused`. The facilitator URL was
+  already required to be `https:`.
+- The hire POST is also refused when a custom `fetchImpl` followed a redirect
+  anyway (`response.redirected`).
 
 ## 1.4.0 release notes
 

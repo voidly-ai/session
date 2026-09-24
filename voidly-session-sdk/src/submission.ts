@@ -253,6 +253,7 @@ export type SubmitRefusal =
   | "chain_mismatch"
   | "facilitator_refused"
   | "facilitator_response_unreadable"
+  | "facilitator_redirect_refused"
   | "unreachable"
   | "broadcast_failed";
 
@@ -415,6 +416,9 @@ export function createFacilitatorSubmitter(input: FacilitatorSubmitterInput): Pa
           method: "POST",
           headers: { "content-type": "application/json", accept: "application/json" },
           body: JSON.stringify(body),
+          // Redirects are never followed: a 307/308 would re-send the signed
+          // authorization to whatever host the Location header names.
+          redirect: "manual",
           ...(input.signal ? { signal: input.signal } : {}),
         });
       } catch (err) {
@@ -426,6 +430,30 @@ export function createFacilitatorSubmitter(input: FacilitatorSubmitterInput): Pa
             "have arrived and settled. Do not re-sign a fresh authorization — the same " +
             "one is idempotent on chain, because USDC marks (authorizer, nonce) consumed " +
             `forever. (${err instanceof Error ? err.message : String(err)})`,
+        };
+      }
+
+      // Checked before the body is read. Browsers report a manual redirect as
+      // "opaqueredirect" (status 0); Node returns the 3xx response itself.
+      // `redirected` catches a fetch implementation that ignored "manual".
+      const responseType: string = res.type;
+      if (
+        responseType === "opaqueredirect" ||
+        res.redirected === true ||
+        (res.status >= 300 && res.status <= 399)
+      ) {
+        return {
+          ok: false,
+          reason: "facilitator_redirect_refused",
+          detail:
+            (res.redirected === true
+              ? "/settle was redirected and the fetch implementation followed it anyway, " +
+                "so the signed authorization also reached the host the redirect named. "
+              : `/settle answered with a redirect (${res.status}) and it was not followed. `) +
+            "This is not proof nothing settled: the facilitator received the authorization. " +
+            "Do not sign a fresh authorization for the same work — the same one is " +
+            "idempotent on chain. Point the facilitator baseUrl at the host that answers " +
+            "/settle directly.",
         };
       }
 
