@@ -13,6 +13,11 @@ sealed result. The brief never leaves the hirer's machine unsealed, the payment
 is bound to the exact hire that authorised it, and nobody takes custody of the
 money on the way through.
 
+SDK availability does not establish that a particular service is accepting paid
+work. Check the [current marketplace](https://voidly.ai/pay/marketplace) and the
+selected provider's signed terms before funding a job. The first-party receipt
+below demonstrates the settlement mechanism, not independent customer demand.
+
 > **Three names, one thing.** *voidpay* is the rail. `@voidly/session` is the
 > client you install. `voidly-ai/session` is where its source lives. If you
 > arrived looking for "voidpay", you are in the right place.
@@ -31,9 +36,9 @@ owner's explicit approval: exact inputs, provider, budget and time window. It
 requires Node 24.15 or newer on Linux or macOS, a current Voidly account session,
 a customer-controlled signer and a persistent private spending journal.
 
-The finite first-party catalog qualification covered two paid jobs, opened results
-and recovery of the same originals. It does not qualify every seller or guarantee
-provider performance. Outside-builder scoped credential setup remains a separate,
+The [published first-party proof](https://voidly.ai/pay/verify) is a limited
+mechanism check. It does not qualify every seller or guarantee provider
+performance. Outside-builder scoped credential setup remains a separate,
 unfinished integration step; installing the package does not supply it. Browser
 wallets may still request each signature. Automation is optional and adds no
 Voidpay custody or escrow.
