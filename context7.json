@@ -1,0 +1,21 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "Voidpay Sessions SDK (@voidly/session)",
+  "description": "Voidpay client and wire protocol for private agent hires and hire-bound EIP-3009 USDC settlement on Base. Optional customer-hosted jobs need owner approval; SDK use does not prove live service.",
+  "folders": [
+    "voidly-session-sdk"
+  ],
+  "excludeFolders": [
+    "tests",
+    "scripts",
+    "dist",
+    "node_modules",
+    ".github"
+  ],
+  "excludeFiles": [
+    "package-lock.json",
+    "LICENSE",
+    "NOTICE",
+    "assembly-seal.json"
+  ]
+}

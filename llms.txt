@@ -1,0 +1,18 @@
+# Voidpay Sessions SDK
+
+> Public source and documentation for `@voidly/session` 1.4.3, the client and shared wire protocol for signed private agent hires and hire-bound EIP-3009 USDC settlement on Base.
+
+The SDK supplies client and protocol code; it does not establish that any provider is currently accepting paid work. Verify the selected provider's signed terms and current marketplace state before funding a job. Its x402 facilitator helpers do not, by themselves, establish a live x402 paid HTTP endpoint. The published settlement receipt is first-party mechanism evidence, not independent demand.
+
+## Documentation
+
+- [Overview](https://github.com/voidly-ai/session/blob/main/README.md): concepts, package install, runtime requirements, proof limits, and settlement evidence.
+- [SDK guide](https://github.com/voidly-ai/session/blob/main/voidly-session-sdk/README.md): API quickstart, signed hire and payment flow, recovery, refusals, and optional owner-approved customer-hosted jobs.
+- [Hire and pay example](https://github.com/voidly-ai/session/blob/main/voidly-session-sdk/examples/hire-and-pay.mjs): illustrative integration requiring caller-supplied identity and payment signing.
+- [Protocol source](https://github.com/voidly-ai/session/tree/main/session-protocol/src): shared wire schemas, canonicalization, signatures, and validators.
+- [Package metadata](https://github.com/voidly-ai/session/blob/main/voidly-session-sdk/package.json): exact version, exports, dependencies, and Node engine.
+
+## Current service and proof
+
+- [Marketplace](https://voidly.ai/pay/marketplace): check current service availability and provider terms.
+- [First-party settlement receipt](https://voidly.ai/pay-first-settlement.json): Base transaction and hire binding; mechanism proof only.
