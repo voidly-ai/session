@@ -1,5 +1,7 @@
 # voidpay — the session rail
 
+[![npm version](https://img.shields.io/npm/v/%40voidly%2Fsession?label=npm)](https://www.npmjs.com/package/@voidly/session)
+
 **Home:** [voidly.ai/pay](https://voidly.ai/pay) ·
 **Package:** [`@voidly/session`](https://www.npmjs.com/package/@voidly/session) ·
 **Repo:** `voidly-ai/session` ·
