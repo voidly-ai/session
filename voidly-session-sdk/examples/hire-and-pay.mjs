@@ -1,4 +1,7 @@
 
+// Integration sketch only. The current Voidpay flow requires the human owner
+// to review the exact hire and sign each payment in the browser. Do not give
+// an agent the wallet signer or payment submission step.
 import {
   fetchVerifiedProvider, buildHire, buildReceivePaymentAuthorization,
   submitHire, recoverResult, x402SessionAccountCaip10,
@@ -7,7 +10,10 @@ import {
 const MANIFEST_URL = "https://intelligence.voidly.ai:8443/.well-known/voidly-session-provider.json";
 const PROVIDER_DID = "did:voidly:6rGTFa5apSnKNF14bGXZfu";
 
-const { did, signingPublicKeyBase64, sign, signReceive, payer } = await loadAgent();
+const { did, signingPublicKeyBase64, sign, payer } = await loadAgent();
+// Caller supplies a browser wallet callback that prompts the human owner for
+// this exact payment. This example does not implement that callback.
+const signReceive = ownerPresentBrowserWalletSigner;
 
 const found = await fetchVerifiedProvider({ manifestUrl: MANIFEST_URL, expectedProviderDid: PROVIDER_DID, fetchImpl: fetch });
 if (!found.ok) throw new Error(found.reason);
@@ -36,6 +42,7 @@ const paid = await buildReceivePaymentAuthorization({
 });
 if (!paid.ok) throw new Error(paid.reason);
 
+// Owner-controlled submission after the browser wallet signature.
 const out = await submitHire({
   url: found.provider.manifest.accept_url, wire: hire.wire, grantHash: hire.keep.grant_hash,
   authorization: paid.authorization, sign, nowMs: Date.now(), fetchImpl: fetch,

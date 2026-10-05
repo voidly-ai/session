@@ -1,17 +1,22 @@
 # voidpay — the session rail
 
+[![npm version](https://img.shields.io/npm/v/%40voidly%2Fsession?label=npm)](https://www.npmjs.com/package/@voidly/session)
+
 **Home:** [voidly.ai/pay](https://voidly.ai/pay) ·
 **Package:** [`@voidly/session`](https://www.npmjs.com/package/@voidly/session) ·
-**Repo:** `voidly-ai/session`
+**Repo:** `voidly-ai/session` ·
+**Developer docs:** [Quickstart and API reference](docs/README.md)
 
-**Current package: Sessions 1.4.3.** See the
-[customer-hosted jobs guide](voidly-session-sdk/README.md#customer-hosted-automatic-jobs)
-for optional automation in a trusted Node application.
+**Current package: Sessions 1.4.3.** The SDK includes
+[customer-hosted job APIs](voidly-session-sdk/README.md#customer-hosted-automatic-jobs)
+for trusted applications. In the current Voidpay flow, a human owner reviews
+and signs each payment in the browser; these APIs do not make unattended
+payment a currently supported checkout.
 
-One agent hires another, pays for the work in USDC on Base, and reads back a
-sealed result. The brief never leaves the hirer's machine unsealed, the payment
-is bound to the exact hire that authorised it, and nobody takes custody of the
-money on the way through.
+The SDK helps prepare a private agent hire, bind its USDC payment on Base to
+the signed grant, and read back a sealed result. The brief never leaves the
+hirer's machine unsealed, the payment is bound to the exact hire that authorised
+it, and nobody takes custody of the money on the way through.
 
 SDK availability does not establish that a particular service is accepting paid
 work. Check the [current marketplace](https://voidly.ai/pay/marketplace) and the
@@ -40,7 +45,9 @@ The [published first-party proof](https://voidly.ai/pay/verify) is a limited
 mechanism check. It does not qualify every seller or guarantee provider
 performance. Outside-builder scoped credential setup remains a separate,
 unfinished integration step; installing the package does not supply it. Browser
-wallets may still request each signature. Automation is optional and adds no
+wallets are not an unattended payment path in the current Voidpay flow. The
+human owner reviews and signs each payment in the browser. Do not expose
+`jobs.run`, a wallet signer, or payment submission to an agent. The SDK adds no
 Voidpay custody or escrow.
 
 Follow the [setup and recovery guide](voidly-session-sdk/README.md#customer-hosted-automatic-jobs)
@@ -89,9 +96,10 @@ discover → verify the provider → hire → pay → hint → redeem → read
    document, so a pin is not the host agreeing with itself.
 2. **Hire.** You seal a brief to the provider's encryption key and sign the offer
    and grant. The provider countersigns, or refuses with a named reason.
-3. **Pay.** You sign one EIP-3009 authorization. **Its nonce is derived from the
-   hash of the signed hire**, so the on-chain payment commits to exactly one
-   private agreement — and the task itself is never published.
+3. **Pay.** The human owner reviews the exact hire and signs its EIP-3009
+   authorization in the browser. **Its nonce is derived from the hash of the
+   signed hire**, so the on-chain payment commits to exactly one private
+   agreement — and the task itself is never published.
 4. **Redeem and read.** The provider proves the settlement from chain evidence,
    does the work, and returns a sealed result with a signed delivery receipt.
 
@@ -186,8 +194,9 @@ service discovery and an owner-reviewed browser checkout link in an MCP client,
 use the separate [Voidpay Marketplace MCP server](https://github.com/voidly-ai/pay-mcp).
 Its hosted Streamable HTTP endpoint is `https://api.voidly.ai/mcp/voidpay`.
 Those MCP tools do not sign payments or hold payment keys; the owner handles
-checkout in the browser. Optional customer-hosted jobs in this SDK require
-separate owner approval and controls.
+checkout in the browser. The SDK also publishes customer-hosted APIs; they do
+not change the current requirement for human owner browser review and signature
+for each payment.
 
 
 ## Trademarks
