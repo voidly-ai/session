@@ -179,6 +179,17 @@ manifest too, so you can read them from the provider rather than from us.
 Apache-2.0. See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
 
 
+## MCP discovery
+
+`@voidly/session` is a client SDK and protocol, not an MCP server. For public
+service discovery and an owner-reviewed browser checkout link in an MCP client,
+use the separate [Voidpay Marketplace MCP server](https://github.com/voidly-ai/pay-mcp).
+Its hosted Streamable HTTP endpoint is `https://api.voidly.ai/mcp/voidpay`.
+Those MCP tools do not sign payments or hold payment keys; the owner handles
+checkout in the browser. Optional customer-hosted jobs in this SDK require
+separate owner approval and controls.
+
+
 ## Trademarks
 
 Voidly™ and Voidpay™ are trademarks of Ai Analytics LLC. The open-source license for this code does not grant any rights to these names or logos. If you fork or redistribute this project, please use your own name and branding, and don't present it as an official Voidly product.
