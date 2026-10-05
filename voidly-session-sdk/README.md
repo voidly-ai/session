@@ -10,6 +10,12 @@ opt-in submission helpers can instead broadcast a caller-authorized transaction
 or ask a facilitator to submit it. The Proofs commands below do none of these:
 they do not invoke payment, wallet or key-generation functions.
 
+**Current payment authority.** The current Voidpay flow requires a human owner
+to review and sign each payment in the browser. These SDK builders and
+caller-supplied signing callbacks do not grant an agent payment authority. Do
+not supply an unattended payment signer or expose signing or submission to an
+agent.
+
 Both halves ship. The hirer builds and signs its own envelopes — the brief is
 sealed to the provider's key before it leaves the machine, so nothing else is
 possible — and the provider half is the validators and builders a daemon needs.
@@ -219,6 +225,9 @@ export async function checkPublicData(publicExerciseJson: string) {
 
 Five calls. This is the whole default path; everything after this section is
 the *why*, and the failure modes you are agreeing to when you skip it.
+For a current payment, `signReceive` must lead to an owner-controlled browser
+wallet prompt for this exact hire. This is an integration sketch, not an
+agent-executable checkout.
 
 ```ts
 import {
@@ -268,11 +277,12 @@ const paid = await buildReceivePaymentAuthorization({
   grant: hire.wire.grant,
   grantHash: hire.keep.grant_hash,
   nowMs: Date.now(),
-  sign: signReceive,          // your wallet's EIP-712 signer
+  sign: signReceive,          // human owner's browser prompt for this payment
 });
 if (!paid.ok) throw new Error(paid.reason);
 
-// 4. SUBMIT. Returns "accepted" only after the countersignature verifies.
+// 4. SUBMIT. Owner-controlled application only; do not give this payment
+//    submission step to an agent. "accepted" requires a verified countersignature.
 const out = await submitHire({
   url: found.provider.manifest.accept_url,
   wire: hire.wire,
@@ -896,6 +906,14 @@ RPC-result callback is exposed, and the existing relay transport is unchanged.
 
 ## Customer-hosted automatic jobs
 
+**Current service status:** These are published customer-hosted SDK APIs and
+historically qualified first-party experiments, not a current unattended
+payment path. The first-party test policy was revoked. A standing program
+approval, budget, or app credential does not replace the human owner's browser
+review and signature for each current payment. Do not expose `jobs.run`, a
+wallet signer, or payment submission to an agent. Future unattended operation
+needs a separately approved release and readiness claim.
+
 The `@voidly/session/customer-hosted` entry is included in the published 1.4.0 package. Its finite first-party catalog qualification covered two paid jobs, opened results and recovery of the same originals; the test policy was then revoked. This does not qualify all providers, establish outside-builder credential onboarding or guarantee provider performance. Current service readiness and each owner's setup still apply.
 
 This optional entry requires Node 24.15 or newer on Linux or macOS (POSIX file permissions), and a persistent directory owned by the running user with mode 0700. It keeps a local SQLite spending journal. The legacy SDK and CLI remain unchanged. Importing this entry opens no database, signs nothing and sends no request.
@@ -913,7 +931,7 @@ import { createCustomerHostedJobs } from '@voidly/session/customer-hosted';
 const jobs = createCustomerHostedJobs({
   directory: applicationPrivatePersistentDirectory,
   session: verifiedVoidlyAccountSession,
-  provider: customerConfiguredNoninteractiveSigner,
+  provider: ownerPresentBrowserWalletProvider,
   policy: {
     version: 'voidpay.customer-hosted-jobs.v1',
     id: retainedOwnerApprovalId,
@@ -927,7 +945,8 @@ const jobs = createCustomerHostedJobs({
   },
 });
 
-// Expose only these job functions to the agent. Keep each operation ID stable.
+// Owner-controlled application only; run may sign and submit payment.
+// Do not expose run to an agent. Keep each operation ID stable.
 await jobs.run({ operationId: applicationJobId, selectedText });
 await jobs.recover(applicationJobId);
 
@@ -941,7 +960,7 @@ Each input record is `{kind:'exact-bytes-v1',digest,byteLength}` for the SHA-256
 
 `submitted` is unconfirmed. Original recovery reports settlement and delivery separately; an accounted payment with an opened result, or the exact native cancellation/unused-release receipt, releases the local active slot. The lifetime reservation stays counted. Native budget enforcement remains independent. No provider performance or wallet funding guarantee is added.
 
-Routine matching work can run without another Voidpay dialog only when the customer has independently configured a noninteractive signer. Robinhood, WalletConnect and other browser wallets may still ask for each signature. Voidpay receives no wallet key and supplies no hosted signing wallet, custody or escrow. Account-key services, provider execution, ranking, operational deployment and native ledger code are absent from this customer entry.
+The SDK can accept a caller-supplied noninteractive EIP-1193 signer, but that source capability is outside the current owner-browser payment flow. Each current payment needs the human owner's browser review and signature. Voidpay receives no wallet key and supplies no hosted signing wallet, custody or escrow. Account-key services, provider execution, ranking, operational deployment and native ledger code are absent from this customer entry.
 
 ### Owner-approved app programs (1.4.2)
 
@@ -964,16 +983,17 @@ const jobs = createCustomerHostedProgramJobs({
     privateKey: applicationRsaPrivateKeyObject,
   },
   lifetime: currentApplicationAuthority, // { isCurrent, signal }; no account token
-  provider: customerConfiguredNoninteractiveSigner,
+  provider: ownerPresentBrowserWalletProvider,
 });
 
-// Only these finite functions go to the agent. IDs come from the approved program.
+// Owner-controlled application only; run may sign and submit payment.
+// Do not expose run to an agent. IDs come from the approved program.
 const outcome = await jobs.run({ selectedText: oneApprovedExactInput });
 await jobs.recover(approvedInputSha256);
 ```
 
 Each distinct approved input has one fixed native entry and begin request ID. Calling `run` again for that input, including after reopening the persistent directory, only recovers its original; it does not create another review, job or signature. Unknown begin, claim, signing and submission outcomes retain the reservation. There is one active job, and lifetime spending remains counted after completion or an unused-payment release. All processes for the same program must share the same persistent journal.
 
-The customer separately supplies the EIP-1193 payment signer. Every payment retains its exact EIP-3009 authorization, nonce, amount, recipient and timing checks. A browser wallet may still prompt. Program approval grants no signing authority, custody, escrow, guaranteed funding or guaranteed delivery. `submitted` remains unconfirmed until original recovery provides settlement and delivery evidence.
+The customer separately supplies the EIP-1193 payment signer. Every payment retains its exact EIP-3009 authorization, nonce, amount, recipient and timing checks. In the current flow, the browser wallet must prompt the human owner for each payment signature. Program approval grants no signing authority, custody, escrow, guaranteed funding or guaranteed delivery. `submitted` remains unconfirmed until original recovery provides settlement and delivery evidence.
 
 Local `revoke()` prevents further execution but retains recovery. Revoking or expiring the actual app grant also ends its remote read authority; the owner must then recover through their genuine Voidly account. No renewal, replacement program, provider switch or new input is automatic. Production use requires separately qualified owner approval, app credentials, customer signer and hosted endpoints.

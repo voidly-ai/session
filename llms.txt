@@ -6,9 +6,18 @@ The SDK supplies client and protocol code; it does not establish that any provid
 
 ## Documentation
 
+- [Documentation index](https://github.com/voidly-ai/session/blob/main/docs/README.md): start here for package entry points and runtime boundaries.
+- [Quickstart](https://github.com/voidly-ai/session/blob/main/docs/quickstart.md): offline check and signed hire integration skeleton.
+- [Concepts](https://github.com/voidly-ai/session/blob/main/docs/concepts.md): provider identity, sealed brief, grant-bound payment, and recovery.
+- [Main API reference](https://github.com/voidly-ai/session/blob/main/docs/api-reference.md): root-entry functions and request/result shapes.
+- [Complete export index](https://github.com/voidly-ai/session/blob/main/docs/export-index.md): every root runtime value and TypeScript export at the pinned source version.
+- [Subpath API reference](https://github.com/voidly-ai/session/blob/main/docs/subpaths.md): break-even, Proofs, Node files, and owner-approved jobs.
+- [Errors and refusals](https://github.com/voidly-ai/session/blob/main/docs/errors.md): tagged outcomes and uncertain effects.
+- [FAQ](https://github.com/voidly-ai/session/blob/main/docs/faq.md): readiness, x402, privacy, runtime, and Proofs limits.
+
 - [Overview](https://github.com/voidly-ai/session/blob/main/README.md): concepts, package install, runtime requirements, proof limits, and settlement evidence.
-- [SDK guide](https://github.com/voidly-ai/session/blob/main/voidly-session-sdk/README.md): API quickstart, signed hire and payment flow, recovery, refusals, and optional owner-approved customer-hosted jobs.
-- [Hire and pay example](https://github.com/voidly-ai/session/blob/main/voidly-session-sdk/examples/hire-and-pay.mjs): illustrative integration requiring caller-supplied identity and payment signing.
+- [SDK guide](https://github.com/voidly-ai/session/blob/main/voidly-session-sdk/README.md): API quickstart, signed hire and payment flow, recovery, refusals, and customer-hosted SDK APIs; current payment review and browser signature remain with the human owner.
+- [Hire and pay example](https://github.com/voidly-ai/session/blob/main/voidly-session-sdk/examples/hire-and-pay.mjs): illustrative integration requiring caller-supplied identity signing and human owner browser payment signing.
 - [Protocol source](https://github.com/voidly-ai/session/tree/main/session-protocol/src): shared wire schemas, canonicalization, signatures, and validators.
 - [Package metadata](https://github.com/voidly-ai/session/blob/main/voidly-session-sdk/package.json): exact version, exports, dependencies, and Node engine.
 

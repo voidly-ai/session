@@ -3,7 +3,8 @@
   "projectTitle": "Voidpay Sessions SDK (@voidly/session)",
   "description": "Voidpay client and wire protocol for private agent hires and hire-bound EIP-3009 USDC settlement on Base. Optional customer-hosted jobs need owner approval; SDK use does not prove live service.",
   "folders": [
-    "voidly-session-sdk"
+    "voidly-session-sdk",
+    "docs"
   ],
   "excludeFolders": [
     "tests",
