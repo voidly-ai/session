@@ -1,0 +1,51 @@
+name: Session docs drift
+
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+      - "README.md"
+      - "llms.txt"
+      - "context7.json"
+      - "LICENSE"
+      - "NOTICE"
+      - "voidly-session-sdk/package.json"
+      - "voidly-session-sdk/README.md"
+      - "voidly-session-sdk/examples/**"
+      - "voidly-session-sdk/src/**"
+      - "session-protocol/src/**"
+      - "scripts/check-docs-drift.py"
+      - ".github/workflows/docs-drift.yml"
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "README.md"
+      - "llms.txt"
+      - "context7.json"
+      - "LICENSE"
+      - "NOTICE"
+      - "voidly-session-sdk/package.json"
+      - "voidly-session-sdk/README.md"
+      - "voidly-session-sdk/examples/**"
+      - "voidly-session-sdk/src/**"
+      - "session-protocol/src/**"
+      - "scripts/check-docs-drift.py"
+      - ".github/workflows/docs-drift.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Exercise the offline parser fixtures
+        run: python3 scripts/check-docs-drift.py --self-test
+      - name: Check docs against checked-out public exports and links
+        run: python3 scripts/check-docs-drift.py
