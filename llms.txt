@@ -12,6 +12,11 @@ The SDK supplies client and protocol code; it does not establish that any provid
 - [Protocol source](https://github.com/voidly-ai/session/tree/main/session-protocol/src): shared wire schemas, canonicalization, signatures, and validators.
 - [Package metadata](https://github.com/voidly-ai/session/blob/main/voidly-session-sdk/package.json): exact version, exports, dependencies, and Node engine.
 
+## MCP discovery
+
+- [Voidpay Marketplace MCP server](https://github.com/voidly-ai/pay-mcp): separate connector for public service discovery and an owner-reviewed browser checkout link.
+- Hosted Streamable HTTP endpoint: `https://api.voidly.ai/mcp/voidpay`. The MCP tools do not sign payments or hold payment keys.
+
 ## Current service and proof
 
 - [Marketplace](https://voidly.ai/pay/marketplace): check current service availability and provider terms.
